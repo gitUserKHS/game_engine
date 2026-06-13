@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 처음 읽는 안내서
+    url: https://github.com/gitUserKHS/game_engine/blob/main/docs/00_START_HERE.md
+    about: 빌드와 코드 읽기를 처음 시작한다면 먼저 확인해 줘.

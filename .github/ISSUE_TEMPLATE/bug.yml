@@ -1,0 +1,37 @@
+name: 버그 신고
+description: 재현 가능한 오동작을 기록한다.
+title: "fix: "
+labels:
+  - "type:bug"
+body:
+  - type: textarea
+    id: symptom
+    attributes:
+      label: 증상
+      description: 실제로 보이는 문제를 적어 줘.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 재현 순서
+      description: 처음 보는 사람도 따라 할 수 있게 번호로 적어 줘.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 기대 결과
+      description: 원래 어떤 동작이어야 하는지 적어 줘.
+    validations:
+      required: true
+  - type: input
+    id: build
+    attributes:
+      label: 빌드와 환경
+      placeholder: "v0.5.0, Windows 11, Visual Studio 2022"
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 로그와 화면
+      description: Output Log, 콘솔 로그, 스크린샷을 붙여 줘.

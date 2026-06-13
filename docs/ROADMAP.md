@@ -1,0 +1,52 @@
+# 로드맵
+
+완료 표시는 그 버전의 학습 목표를 데모와 테스트로 확인했다는 뜻이다.
+
+## v0.5 Core와 Editor Foundation
+
+- [x] Object, World, Actor, ActorComponent, SceneComponent
+- [x] Z-up cm 좌표계와 attachment
+- [x] 명시적 reflection과 자동 Details
+- [x] JSON World 저장/로드
+- [x] Edit, Simulate, Play In Editor 복제
+- [x] AABB 충돌, raycast, sweep
+- [x] RenderScene과 RenderProxy
+
+## v0.6 Rendering과 Materials
+
+- [ ] DirectionalLight를 사용하는 기본 Lambert 조명
+- [ ] Material과 MaterialInstance 연결
+- [ ] Shadow, Opaque, Debug, UI 렌더 패스
+- [ ] 렌더링 디버그 보기
+
+## v0.7 Asset Pipeline
+
+- [ ] GUID 기반 asset handle
+- [ ] glTF와 texture import
+- [ ] 요청 시 GPU resource 생성
+- [ ] Content Browser import 흐름
+
+## v0.8 Gameplay Framework
+
+- [ ] InputAction/InputAxis 설정 파일
+- [ ] SpringArm 카메라 충돌
+- [ ] Character sweep와 계단 이동 개선
+- [ ] collision channel 편집 UI
+
+## v0.9 Gameplay Tools
+
+- [ ] Jolt rigid body adapter
+- [ ] skeletal animation
+- [ ] ImGuizmo rotate/scale와 Undo/Redo 확장
+- [ ] Blueprint-lite event/property graph
+- [ ] 체력, 투사체, 전투 Component
+
+## v1.0 작은 3D RPG
+
+- [ ] 에디터에서 레벨 제작
+- [ ] 이동, 카메라, 충돌, 애니메이션, 전투
+- [ ] 저장 가능한 World와 asset
+- [ ] 별도 게임 실행 패키징
+
+멀티스레드 렌더링, garbage collector, network replication, Nanite, Lumen,
+전체 RHI 추상화는 v1.0 범위에 포함하지 않는다.

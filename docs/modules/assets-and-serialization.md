@@ -1,0 +1,60 @@
+# Asset과 Serialization
+
+## 목표
+
+Content 폴더의 파일을 GUID로 식별하고, World 객체와 프로퍼티를 JSON으로
+저장하고 다시 만드는 과정을 이해한다.
+
+## 필요한 이유
+
+경로만 저장하면 파일 이름이나 폴더가 바뀔 때 모든 참조가 깨진다. 안정적인
+GUID와 reflection 기반 저장은 에디터 확장의 기초가 된다.
+
+## 핵심 타입
+
+- [`AssetData`](../../include/engine/Systems.hpp): GUID와 경로 메타데이터
+- [`AssetRegistry`](../../include/engine/Systems.hpp): `.meta` 스캔과 조회
+- [`WorldSerializer`](../../include/engine/Systems.hpp): World JSON 왕복
+- [`ReflectionRegistry`](../../include/engine/Core.hpp): 저장할 타입과 프로퍼티
+
+## 흐름도
+
+```mermaid
+flowchart TD
+    Content["Content 파일"] --> Meta[".meta GUID"]
+    Meta --> Registry["AssetRegistry"]
+    World["World와 Actor"] --> Reflection["Reflection metadata"]
+    Reflection --> Json["World JSON"]
+    Json --> Factory["타입 factory"]
+    Factory --> Restored["복원된 World"]
+    Registry --> Restored
+```
+
+## 코드 따라가기
+
+1. [`Content/Meshes/Cube.asset.json.meta`](../../Content/Meshes/Cube.asset.json.meta)
+   에서 에셋 GUID 형식을 본다.
+2. [`Systems.cpp`](../../src/Systems.cpp)의 `AssetRegistry::scan`에서 `.meta`
+   검색과 등록을 읽는다.
+3. `WorldSerializer::serialize`에서 타입, GUID, 프로퍼티 저장을 확인한다.
+4. `WorldSerializer::deserialize`에서 타입 factory와 기본값 처리를 읽는다.
+5. 모든 객체를 만든 뒤 attachment를 연결하는 두 번째 단계를 찾는다.
+
+## 실험 과제
+
+World를 저장하고 Actor 이름과 Transform을 바꾼 뒤 다시 로드한다. 저장 시점 값과
+GUID가 복원되는지 JSON 파일과 Outliner에서 비교한다.
+
+## 흔한 실수
+
+- 에셋 참조에 절대 파일 경로를 저장한다.
+- 알 수 없는 프로퍼티 하나 때문에 전체 로드를 실패시킨다.
+- 부모 객체보다 자식을 먼저 연결하려 한다.
+- 저장 중인 실행 상태와 편집 가능한 프로퍼티를 구분하지 않는다.
+- `.meta` 파일을 Git에서 빠뜨린다.
+
+## 관련 테스트
+
+[`EngineTests.cpp`](../../tests/EngineTests.cpp)의
+`testReflectionAndSerialization`이 GUID, 타입, Transform과 프로퍼티의
+저장/로드 왕복을 확인한다.

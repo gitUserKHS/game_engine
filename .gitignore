@@ -1,0 +1,11 @@
+/build*/
+/out/
+/.cache/
+/.idea/
+/.vscode/
+/.vs/
+*.user
+*.suo
+*.VC.db
+*.pdb
+imgui.ini
