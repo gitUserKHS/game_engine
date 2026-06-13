@@ -41,6 +41,8 @@ chore: GitHub 설정 정리
 ```
 
 PR은 squash되므로 **PR 제목이 main에 남는 최종 커밋 메시지**가 된다.
+REST API로 PR을 자동 생성한다면 JSON 본문을 UTF-8로 전송해 한국어 제목과
+학습 요약이 깨지지 않는지도 확인한다.
 
 ## Issue가 필요한 경우
 
@@ -75,3 +77,4 @@ PR은 squash되므로 **PR 제목이 main에 남는 최종 커밋 메시지**가
 - 2026-06-14: 최초 `main` 기준선에서 `build-and-test`와 `docs-check` 성공
 - 2026-06-14: `docs/verify-workflow` 문서 PR로 자동 squash merge와 원격 브랜치
   자동 삭제 검증
+- 2026-06-14: 한국어 PR 제목과 본문의 UTF-8 저장 검증
