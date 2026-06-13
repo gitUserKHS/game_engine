@@ -69,3 +69,9 @@ PR은 squash되므로 **PR 제목이 main에 남는 최종 커밋 메시지**가
 4. `vX.Y.Z` Git 태그와 같은 이름의 GitHub Release를 만든다.
 
 버전 파일, changelog, 태그가 서로 다르면 릴리스하지 않는다.
+
+## 운영 검증 기록
+
+- 2026-06-14: 최초 `main` 기준선에서 `build-and-test`와 `docs-check` 성공
+- 2026-06-14: `docs/verify-workflow` 문서 PR로 자동 squash merge와 원격 브랜치
+  자동 삭제 검증
