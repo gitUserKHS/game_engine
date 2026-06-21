@@ -1,9 +1,61 @@
 #include "engine/Gameplay.hpp"
 
+#include <nlohmann/json.hpp>
+
 #include <glm/geometric.hpp>
 
 #include <algorithm>
 #include <stdexcept>
+
+namespace {
+
+using Json = nlohmann::json;
+
+engine::PropertyValue blueprintValueFromJson(
+    engine::PropertyType type,
+    const Json& value
+) {
+    using engine::Guid;
+    using engine::PropertyType;
+
+    switch (type) {
+    case PropertyType::Boolean:
+        return value.get<bool>();
+    case PropertyType::Integer:
+        return value.get<int>();
+    case PropertyType::Float:
+        return value.get<float>();
+    case PropertyType::String:
+        return value.get<std::string>();
+    case PropertyType::Vector3:
+        return glm::vec3{
+            value.at(0).get<float>(),
+            value.at(1).get<float>(),
+            value.at(2).get<float>(),
+        };
+    case PropertyType::Guid:
+        return Guid::parse(value.get<std::string>()).value_or(Guid{});
+    }
+    return {};
+}
+
+const engine::PropertyDescriptor* findProperty(
+    const engine::Object& object,
+    std::string_view name
+) {
+    const engine::TypeDescriptor* type = object.typeDescriptor();
+    if (type == nullptr) {
+        return nullptr;
+    }
+    for (const engine::PropertyDescriptor* property : type->allProperties()) {
+        if (property->name == name) {
+            return property;
+        }
+    }
+    return nullptr;
+}
+
+} // namespace
 
 namespace engine {
 
@@ -357,6 +409,140 @@ Actor* CombatComponent::fireProjectile(const glm::vec3& direction) {
     projectileComponent.setLifetime(projectileLifetime_);
     projectileComponent.setInstigator(source);
     return &projectile;
+}
+
+BlueprintComponent::BlueprintComponent(std::string name, Actor* owner)
+    : ActorComponent(std::move(name), owner) {
+    tickSettings().enabled = true;
+    tickSettings().group = TickGroup::PostUpdate;
+}
+
+std::string_view BlueprintComponent::typeName() const {
+    return "BlueprintComponent";
+}
+
+void BlueprintComponent::beginPlay() {
+    (void)executeEvent("BeginPlay");
+}
+
+void BlueprintComponent::tickComponent(float deltaTime) {
+    (void)executeEvent("Tick", deltaTime);
+}
+
+const std::string& BlueprintComponent::graphJson() const {
+    return graphJson_;
+}
+
+void BlueprintComponent::setGraphJson(std::string graph) {
+    graphJson_ = std::move(graph);
+    rebuildActions();
+}
+
+int BlueprintComponent::executionCount() const {
+    return executionCount_;
+}
+
+int BlueprintComponent::executeEvent(
+    std::string_view eventName,
+    float deltaTime
+) {
+    rebuildActions();
+    int executed = 0;
+    for (const Action& action : actions_) {
+        if (action.eventName == eventName && applyAction(action, deltaTime)) {
+            ++executed;
+            ++executionCount_;
+        }
+    }
+    return executed;
+}
+
+Object* BlueprintComponent::resolveTarget(const Action& action) const {
+    Actor* actor = owner();
+    if (actor == nullptr) {
+        return nullptr;
+    }
+    if (action.target.empty() || action.target == "Owner") {
+        return actor;
+    }
+
+    for (const auto& component : actor->components()) {
+        if (component->name() == action.target ||
+            component->typeName() == action.target) {
+            return component.get();
+        }
+        const TypeDescriptor* type = component->typeDescriptor();
+        const TypeDescriptor* requested =
+            ReflectionRegistry::instance().find(action.target);
+        if (type != nullptr && requested != nullptr && type->isA(*requested)) {
+            return component.get();
+        }
+    }
+    return nullptr;
+}
+
+bool BlueprintComponent::applyAction(
+    const Action& action,
+    float deltaTime
+) {
+    Object* target = resolveTarget(action);
+    if (target == nullptr) {
+        return false;
+    }
+    const PropertyDescriptor* property = findProperty(*target, action.property);
+    if (property == nullptr || !property->setter) {
+        return false;
+    }
+
+    if (action.action == "SetProperty") {
+        return property->setter(*target, action.value);
+    }
+
+    if (action.action == "AddFloat") {
+        if (!property->getter || property->type != PropertyType::Float) {
+            return false;
+        }
+        const PropertyValue currentValue = property->getter(*target);
+        const auto* current = std::get_if<float>(&currentValue);
+        const auto* amount = std::get_if<float>(&action.value);
+        if (current == nullptr || amount == nullptr) {
+            return false;
+        }
+        const float scale = action.scaleByDelta ? deltaTime : 1.0F;
+        return property->setter(*target, *current + (*amount * scale));
+    }
+
+    return false;
+}
+
+void BlueprintComponent::rebuildActions() {
+    actions_.clear();
+    if (graphJson_.empty()) {
+        return;
+    }
+
+    try {
+        const Json graph = Json::parse(graphJson_);
+        for (const Json& node : graph.value("nodes", Json::array())) {
+            Action action;
+            action.eventName = node.value("event", std::string{});
+            action.action = node.value("action", std::string{});
+            action.target = node.value("target", std::string{"Owner"});
+            action.property = node.value("property", std::string{});
+            action.scaleByDelta = node.value("scaleByDelta", false);
+
+            Object* target = resolveTarget(action);
+            const PropertyDescriptor* property =
+                target == nullptr ? nullptr : findProperty(*target, action.property);
+            if (property == nullptr || !node.contains("value")) {
+                continue;
+            }
+            action.value = blueprintValueFromJson(property->type, node.at("value"));
+            actions_.push_back(std::move(action));
+        }
+    } catch (const std::exception&) {
+        actions_.clear();
+    }
 }
 
 GameInstance::GameInstance()

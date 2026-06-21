@@ -388,6 +388,67 @@ void testCombatProjectileDamagesHealth() {
     );
 }
 
+void testBlueprintLiteEventsAndSerialization() {
+    engine::registerEngineTypes();
+    engine::World world;
+    auto& character = world.spawnActor<engine::Character>("ScriptedHero");
+    auto& health = character.addComponent<engine::HealthComponent>("Health");
+    health.setMaxHealth(100.0F);
+    health.setCurrentHealth(100.0F);
+    auto& blueprint =
+        character.addComponent<engine::BlueprintComponent>("Blueprint");
+    blueprint.setGraphJson(R"({
+  "nodes": [
+    {
+      "event": "BeginPlay",
+      "action": "SetProperty",
+      "target": "Owner",
+      "property": "MoveSpeed",
+      "value": 720.0
+    },
+    {
+      "event": "Tick",
+      "action": "AddFloat",
+      "target": "HealthComponent",
+      "property": "CurrentHealth",
+      "value": -10.0,
+      "scaleByDelta": true
+    }
+  ]
+})");
+
+    world.beginPlay();
+    require(
+        near(character.moveSpeed(), 720.0F),
+        "Blueprint BeginPlay did not set an owner property."
+    );
+    world.tick(0.5F);
+    require(
+        near(health.currentHealth(), 95.0F),
+        "Blueprint Tick did not add to a component float property."
+    );
+    require(
+        blueprint.executionCount() >= 2,
+        "Blueprint execution count did not track executed nodes."
+    );
+
+    const std::string saved = engine::WorldSerializer::toJson(world);
+    auto loaded = engine::WorldSerializer::fromJson(saved);
+    require(loaded != nullptr, "Blueprint World JSON did not reload.");
+    auto* loadedCharacter =
+        dynamic_cast<engine::Character*>(loaded->findActor(character.guid()));
+    require(
+        loadedCharacter != nullptr,
+        "Blueprint owner Actor was not restored."
+    );
+    loadedCharacter->setMoveSpeed(300.0F);
+    loaded->beginPlay();
+    require(
+        near(loadedCharacter->moveSpeed(), 720.0F),
+        "Blueprint GraphJson did not survive serialization."
+    );
+}
+
 void testEditorViewportMath() {
     engine::EditorViewportController camera;
     const glm::vec3 originalPosition = camera.position();
@@ -819,6 +880,7 @@ int main() {
         testCharacterCameraSeesPlayer();
         testSpringArmCameraCollisionPullsCameraIn();
         testCombatProjectileDamagesHealth();
+        testBlueprintLiteEventsAndSerialization();
         testEditorViewportMath();
         testRenderProxyPicking();
         testWorldRestoreAndSnapshotTransactions();

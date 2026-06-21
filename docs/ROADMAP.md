@@ -44,7 +44,7 @@
 - [ ] Jolt rigid body adapter
 - [ ] skeletal animation
 - [x] ImGuizmo rotate/scale와 Undo/Redo 확장
-- [ ] Blueprint-lite event/property graph
+- [x] Blueprint-lite event/property graph
 - [x] 체력, 투사체, 전투 Component
 
 ## v1.0 작은 3D RPG

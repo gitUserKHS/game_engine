@@ -3,6 +3,9 @@
 #include "engine/Systems.hpp"
 
 #include <memory>
+#include <string>
+#include <string_view>
+#include <vector>
 
 namespace engine {
 
@@ -136,6 +139,39 @@ private:
     float projectileSpeed_{1200.0F};
     float projectileDamage_{20.0F};
     float projectileLifetime_{3.0F};
+};
+
+/// 작은 Blueprint 학습용 컴포넌트다. JSON 이벤트 그래프를 읽어 reflection property를 조작한다.
+class BlueprintComponent : public ActorComponent {
+public:
+    BlueprintComponent(std::string name, Actor* owner);
+
+    [[nodiscard]] std::string_view typeName() const override;
+    void beginPlay() override;
+    void tickComponent(float deltaTime) override;
+
+    [[nodiscard]] const std::string& graphJson() const;
+    void setGraphJson(std::string graph);
+    [[nodiscard]] int executionCount() const;
+    [[nodiscard]] int executeEvent(std::string_view eventName, float deltaTime = 0.0F);
+
+private:
+    struct Action {
+        std::string eventName;
+        std::string action;
+        std::string target;
+        std::string property;
+        PropertyValue value;
+        bool scaleByDelta{false};
+    };
+
+    [[nodiscard]] Object* resolveTarget(const Action& action) const;
+    [[nodiscard]] bool applyAction(const Action& action, float deltaTime);
+    void rebuildActions();
+
+    std::string graphJson_;
+    std::vector<Action> actions_;
+    int executionCount_{0};
 };
 
 class GameInstance : public Object {

@@ -17,6 +17,7 @@ Component로 붙인다. 체력은 `HealthComponent`, 발사는 `CombatComponent`
 - [`HealthComponent`](../../include/engine/Gameplay.hpp): 최대 체력과 현재 체력을 가진다.
 - [`CombatComponent`](../../include/engine/Gameplay.hpp): 방향을 받아 Projectile Actor를 생성한다.
 - [`ProjectileComponent`](../../include/engine/Gameplay.hpp): 매 tick 이동하고 raycast로 맞은 대상을 찾는다.
+- [`BlueprintComponent`](../../include/engine/Gameplay.hpp): JSON 이벤트 그래프로 reflection property를 읽고 쓴다.
 - [`BoxComponent`](../../include/engine/Components.hpp): 투사체와 대상의 간단한 충돌 경계를 제공한다.
 - [`CollisionWorld`](../../include/engine/Systems.hpp): raycast 질의를 실행한다.
 
@@ -33,6 +34,42 @@ flowchart LR
     Projectile --> Destroy["투사체 지연 삭제"]
 ```
 
+## Blueprint-lite 이벤트 그래프
+
+`BlueprintComponent`는 아직 노드 편집 화면이 아니라, 저장 가능한 JSON 그래프를 실행하는
+작은 런타임이다. 그래프의 각 node는 `event`, `action`, `target`, `property`, `value`를
+가진다. 현재 지원하는 이벤트는 `BeginPlay`와 `Tick`이고, action은 property를 바로
+설정하는 `SetProperty`, float property에 값을 더하는 `AddFloat`다.
+
+예를 들어 아래 그래프는 BeginPlay 때 소유 Actor의 `MoveSpeed`를 바꾸고, Tick마다
+`HealthComponent.CurrentHealth`를 delta time에 맞춰 조금씩 줄인다.
+
+```json
+{
+  "nodes": [
+    {
+      "event": "BeginPlay",
+      "action": "SetProperty",
+      "target": "Owner",
+      "property": "MoveSpeed",
+      "value": 720.0
+    },
+    {
+      "event": "Tick",
+      "action": "AddFloat",
+      "target": "HealthComponent",
+      "property": "CurrentHealth",
+      "value": -10.0,
+      "scaleByDelta": true
+    }
+  ]
+}
+```
+
+중요한 점은 property 이름을 직접 C++ 멤버에 연결하지 않는다는 것이다.
+`Reflection.cpp`에 등록된 `PropertyDescriptor`를 찾아 setter를 호출하므로, Details
+패널과 World 저장/로드가 보는 property 목록을 Blueprint-lite도 함께 사용한다.
+
 ## 코드 따라가기
 
 1. [`Gameplay.cpp`](../../src/Gameplay.cpp)의 `CombatComponent::fireProjectile`을
@@ -44,6 +81,9 @@ flowchart LR
    확인한다.
 4. [`Reflection.cpp`](../../src/Reflection.cpp)에서 세 컴포넌트의 프로퍼티가 Details
    패널과 저장 시스템에 등록되는 방식을 본다.
+5. 같은 파일에서 `BlueprintComponent.GraphJson` 등록을 찾고,
+   [`Gameplay.cpp`](../../src/Gameplay.cpp)의 `BlueprintComponent::executeEvent`가
+   reflection property를 실행하는 흐름을 확인한다.
 
 ## 실험 과제
 
@@ -64,3 +104,6 @@ flowchart LR
 [`EngineTests.cpp`](../../tests/EngineTests.cpp)의
 `testCombatProjectileDamagesHealth`가 발사자, 대상, 체력 컴포넌트를 만든 뒤 fixed tick
 한 번으로 투사체 피해가 적용되는지 확인한다.
+
+`testBlueprintLiteEventsAndSerialization`은 BeginPlay/Tick 그래프 실행, delta 기반
+float property 변경, World JSON 저장/로드 후 GraphJson 보존을 함께 확인한다.

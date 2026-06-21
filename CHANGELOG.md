@@ -20,6 +20,7 @@
 - Engine Debug 패널의 Opaque, Debug Wire, Selection Overlay 렌더 통계 보기
 - `RenderPassRecord` 기반 Shadow, Opaque, Debug, UI 패스 기록과 Debug 패널 표시
 - Directional light용 1024px shadow depth map과 기본 shadow factor 셰이더
+- `BlueprintComponent` 기반 BeginPlay/Tick 이벤트와 reflection property 실행 그래프
 
 - 크기 조절 가능한 OpenGL framebuffer 기반 ImGui Viewport
 - Unreal 방식 에디터 카메라, visible proxy 클릭 선택, 선택 wireframe

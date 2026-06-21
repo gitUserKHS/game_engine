@@ -632,6 +632,37 @@ void registerEngineTypes() {
         },
     });
     registry.registerType({
+        "BlueprintComponent",
+        &actorComponent,
+        [](Object* outer, std::string name) {
+            return std::make_unique<BlueprintComponent>(
+                std::move(name),
+                dynamic_cast<Actor*>(outer)
+            );
+        },
+        {
+            {
+                "GraphJson",
+                "Blueprint",
+                PropertyType::String,
+                kEditSave,
+                [](const Object& object) -> PropertyValue {
+                    return dynamic_cast<const BlueprintComponent&>(object)
+                        .graphJson();
+                },
+                [](Object& object, const PropertyValue& value) {
+                    auto* blueprint = dynamic_cast<BlueprintComponent*>(&object);
+                    const auto* graph = std::get_if<std::string>(&value);
+                    if (blueprint == nullptr || graph == nullptr) {
+                        return false;
+                    }
+                    blueprint->setGraphJson(*graph);
+                    return true;
+                },
+            },
+        },
+    });
+    registry.registerType({
         "GameInstance",
         &object,
         [](Object*, std::string) {
