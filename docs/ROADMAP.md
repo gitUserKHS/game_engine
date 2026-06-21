@@ -27,7 +27,7 @@
 
 - [x] GUID 기반 asset handle
 - [x] StaticMesh와 Material JSON 에셋 CPU 로딩
-- [ ] glTF와 texture import
+- [x] glTF와 texture import API
 - [ ] 요청 시 GPU resource 생성
 - [ ] Content Browser import 흐름
 

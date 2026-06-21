@@ -15,6 +15,7 @@
 - `F9` 및 CLI editor/viewport PNG와 JSON metadata 캡처
 - `DirectionalLightComponent` 기반 기본 Lambert 조명과 MaterialInstance 색 반영
 - GUID 기반 StaticMesh/Material JSON 에셋 로드 API
+- 외부 `.gltf`, `.glb`, 이미지 파일을 Content 에셋과 `.meta`로 등록하는 importer API
 - 카메라, picking, snapshot 복원, CLI, PNG 방향 테스트
 - 에디터 첫 실습과 AI 시각 테스트 한국어 문서
 

@@ -169,6 +169,29 @@ struct MaterialAsset {
     MaterialInstance material;
 };
 
+struct AssetImportResult {
+    bool success{false};
+    AssetData asset;
+    std::filesystem::path copiedSource;
+    std::filesystem::path metadata;
+    std::string error;
+};
+
+class AssetImporter {
+public:
+    /// 외부 glTF/texture 파일을 Content 아래 엔진 에셋 JSON과 .meta로 등록한다.
+    [[nodiscard]] static AssetImportResult importGltfAsStaticMesh(
+        const std::filesystem::path& source,
+        const std::filesystem::path& contentRoot,
+        OutputLog* log = nullptr
+    );
+    [[nodiscard]] static AssetImportResult importTexture(
+        const std::filesystem::path& source,
+        const std::filesystem::path& contentRoot,
+        OutputLog* log = nullptr
+    );
+};
+
 class AssetRegistry {
 public:
     /// Content 아래 .meta를 스캔하며 GPU 리소스는 소유하지 않는다.

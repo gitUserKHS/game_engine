@@ -14,6 +14,7 @@ GUID와 reflection 기반 저장은 에디터 확장의 기초가 된다.
 
 - [`AssetData`](../../include/engine/Systems.hpp): GUID와 경로 메타데이터
 - [`AssetRegistry`](../../include/engine/Systems.hpp): `.meta` 스캔과 조회
+- [`AssetImporter`](../../include/engine/Systems.hpp): 외부 glTF와 texture를 Content 에셋으로 등록
 - [`StaticMeshAsset`, `MaterialAsset`](../../include/engine/Systems.hpp): JSON에서 읽은 CPU 에셋 값
 - [`WorldSerializer`](../../include/engine/Systems.hpp): World JSON 왕복
 - [`ReflectionRegistry`](../../include/engine/Core.hpp): 저장할 타입과 프로퍼티
@@ -23,6 +24,8 @@ GUID와 reflection 기반 저장은 에디터 확장의 기초가 된다.
 ```mermaid
 flowchart TD
     Content["Content 파일"] --> Meta[".meta GUID"]
+    External["외부 glTF/Texture"] --> Importer["AssetImporter"]
+    Importer --> Content
     Meta --> Registry["AssetRegistry"]
     Registry --> Load["loadStaticMesh / loadMaterial"]
     World["World와 Actor"] --> Reflection["Reflection metadata"]
@@ -38,11 +41,13 @@ flowchart TD
    에서 에셋 GUID 형식을 본다.
 2. [`Systems.cpp`](../../src/Systems.cpp)의 `AssetRegistry::scan`에서 `.meta`
    검색과 등록을 읽는다.
-3. `AssetRegistry::loadStaticMesh`와 `loadMaterial`에서 GUID로 source JSON을
+3. `AssetImporter::importGltfAsStaticMesh`와 `importTexture`에서 외부 파일을
+   `Content/Imported/` 아래로 복사하고 `.meta`를 만드는 과정을 읽는다.
+4. `AssetRegistry::loadStaticMesh`와 `loadMaterial`에서 GUID로 source JSON을
    여는 과정을 읽는다.
-4. `WorldSerializer::toJson`에서 타입, GUID, 프로퍼티 저장을 확인한다.
-5. `WorldSerializer::fromJson`에서 타입 factory와 기본값 처리를 읽는다.
-6. 모든 객체를 만든 뒤 attachment를 연결하는 두 번째 단계를 찾는다.
+5. `WorldSerializer::toJson`에서 타입, GUID, 프로퍼티 저장을 확인한다.
+6. `WorldSerializer::fromJson`에서 타입 factory와 기본값 처리를 읽는다.
+7. 모든 객체를 만든 뒤 attachment를 연결하는 두 번째 단계를 찾는다.
 
 ## 실험 과제
 
@@ -57,6 +62,7 @@ GUID가 복원되는지 JSON 파일과 Outliner에서 비교한다.
 - 저장 중인 실행 상태와 편집 가능한 프로퍼티를 구분하지 않는다.
 - `.meta` 파일을 Git에서 빠뜨린다.
 - `.meta`의 type과 source JSON의 type을 검증하지 않고 아무 타입으로 로드한다.
+- importer가 만든 원본 복사본이 아니라 외부 절대 경로를 에셋 JSON에 저장한다.
 
 ## 관련 테스트
 
@@ -64,3 +70,5 @@ GUID가 복원되는지 JSON 파일과 Outliner에서 비교한다.
 `testReflectionAndSerialization`이 GUID, 타입, Transform과 프로퍼티의
 저장/로드 왕복을 확인한다. `testAssetRegistryLoadsGuidAssets`는 `.meta` 스캔,
 GUID/name/type 조회, StaticMesh와 Material JSON 로드를 확인한다.
+`testAssetImporterCreatesMetaFiles`는 glTF와 texture importer가 source JSON,
+원본 복사본, `.meta`를 만들고 Registry에서 다시 찾을 수 있는지 확인한다.

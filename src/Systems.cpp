@@ -6,6 +6,7 @@
 #include <glm/geometric.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <limits>
 #include <map>
@@ -126,6 +127,71 @@ glm::vec3 jsonVectorOr(
         found->at(1).get<float>(),
         found->at(2).get<float>(),
     };
+}
+
+std::string lowerAscii(std::string text) {
+    for (char& character : text) {
+        character = static_cast<char>(
+            std::tolower(static_cast<unsigned char>(character))
+        );
+    }
+    return text;
+}
+
+std::string extensionLower(const std::filesystem::path& path) {
+    return lowerAscii(path.extension().string());
+}
+
+std::filesystem::path uniqueAssetPath(
+    const std::filesystem::path& directory,
+    const std::filesystem::path& preferredName
+) {
+    std::filesystem::path candidate = directory / preferredName;
+    if (!std::filesystem::exists(candidate)) {
+        return candidate;
+    }
+
+    const std::filesystem::path stem = preferredName.stem();
+    const std::filesystem::path extension = preferredName.extension();
+    for (int suffix = 2;; ++suffix) {
+        candidate = directory /
+                    (stem.wstring() + L" " + std::to_wstring(suffix) +
+                     extension.wstring());
+        if (!std::filesystem::exists(candidate)) {
+            return candidate;
+        }
+    }
+}
+
+void logImportFailure(
+    engine::AssetImportResult& result,
+    std::string message,
+    engine::OutputLog* log
+) {
+    result.success = false;
+    result.error = std::move(message);
+    if (log != nullptr) {
+        log->write(result.error);
+    }
+}
+
+engine::Guid guidFromExistingMeta(const std::filesystem::path& metaPath) {
+    const std::optional<Json> meta = readJsonFile(metaPath, nullptr);
+    if (!meta.has_value() || !meta->contains("guid")) {
+        return engine::Guid::create();
+    }
+    return engine::Guid::parse(meta->value("guid", ""))
+        .value_or(engine::Guid::create());
+}
+
+bool writeJsonFile(const std::filesystem::path& path, const Json& json) {
+    std::filesystem::create_directories(path.parent_path());
+    std::ofstream stream(path);
+    if (!stream) {
+        return false;
+    }
+    stream << json.dump(2);
+    return true;
 }
 
 Json serializeProperties(const engine::Object& object) {
@@ -539,6 +605,152 @@ void OutputLog::write(std::string message) {
 
 const std::vector<std::string>& OutputLog::messages() const {
     return messages_;
+}
+
+AssetImportResult AssetImporter::importGltfAsStaticMesh(
+    const std::filesystem::path& source,
+    const std::filesystem::path& contentRoot,
+    OutputLog* log
+) {
+    AssetImportResult result;
+    if (!std::filesystem::exists(source)) {
+        logImportFailure(result, "glTF import source does not exist.", log);
+        return result;
+    }
+
+    const std::string extension = extensionLower(source);
+    if (extension != ".gltf" && extension != ".glb") {
+        logImportFailure(result, "glTF import requires .gltf or .glb.", log);
+        return result;
+    }
+    if (extension == ".gltf") {
+        const std::optional<Json> gltf = readJsonFile(source, log);
+        if (!gltf.has_value() || !gltf->contains("asset")) {
+            logImportFailure(result, "glTF file is missing asset metadata.", log);
+            return result;
+        }
+    }
+
+    const std::filesystem::path directory =
+        contentRoot / "Imported" / "Meshes";
+    std::filesystem::create_directories(directory);
+    const std::filesystem::path assetJson = uniqueAssetPath(
+        directory,
+        source.stem().wstring() + L".asset.json"
+    );
+    const std::filesystem::path copiedSource = uniqueAssetPath(
+        directory,
+        source.filename()
+    );
+
+    std::error_code copyError;
+    std::filesystem::copy_file(
+        source,
+        copiedSource,
+        std::filesystem::copy_options::overwrite_existing,
+        copyError
+    );
+    if (copyError) {
+        logImportFailure(result, "Could not copy glTF source file.", log);
+        return result;
+    }
+
+    std::filesystem::path meta = assetJson;
+    meta += L".meta";
+    const Guid guid = guidFromExistingMeta(meta);
+    const std::string name = pathToUtf8(source.stem());
+    const Json asset{
+        {"type", "StaticMesh"},
+        {"primitive", "Cube"},
+        {"source", pathToUtf8(copiedSource.filename())},
+        {"sourceFormat", extension == ".glb" ? "glb" : "glTF"},
+    };
+    const Json metadata{
+        {"guid", guid.toString()},
+        {"name", name},
+        {"type", "StaticMesh"},
+        {"source", pathToUtf8(assetJson.filename())},
+    };
+    if (!writeJsonFile(assetJson, asset) || !writeJsonFile(meta, metadata)) {
+        logImportFailure(result, "Could not write imported glTF metadata.", log);
+        return result;
+    }
+
+    result.success = true;
+    result.asset = AssetData{guid, name, "StaticMesh", assetJson};
+    result.copiedSource = copiedSource;
+    result.metadata = meta;
+    return result;
+}
+
+AssetImportResult AssetImporter::importTexture(
+    const std::filesystem::path& source,
+    const std::filesystem::path& contentRoot,
+    OutputLog* log
+) {
+    AssetImportResult result;
+    if (!std::filesystem::exists(source)) {
+        logImportFailure(result, "Texture import source does not exist.", log);
+        return result;
+    }
+
+    const std::string extension = extensionLower(source);
+    if (extension != ".png" && extension != ".jpg" &&
+        extension != ".jpeg" && extension != ".bmp" &&
+        extension != ".tga") {
+        logImportFailure(result, "Texture import requires an image file.", log);
+        return result;
+    }
+
+    const std::filesystem::path directory =
+        contentRoot / "Imported" / "Textures";
+    std::filesystem::create_directories(directory);
+    const std::filesystem::path textureJson = uniqueAssetPath(
+        directory,
+        source.stem().wstring() + L".texture.json"
+    );
+    const std::filesystem::path copiedSource = uniqueAssetPath(
+        directory,
+        source.filename()
+    );
+
+    std::error_code copyError;
+    std::filesystem::copy_file(
+        source,
+        copiedSource,
+        std::filesystem::copy_options::overwrite_existing,
+        copyError
+    );
+    if (copyError) {
+        logImportFailure(result, "Could not copy texture source file.", log);
+        return result;
+    }
+
+    std::filesystem::path meta = textureJson;
+    meta += L".meta";
+    const Guid guid = guidFromExistingMeta(meta);
+    const std::string name = pathToUtf8(source.stem());
+    const Json asset{
+        {"type", "Texture"},
+        {"source", pathToUtf8(copiedSource.filename())},
+        {"sourceFormat", extension.substr(1)},
+    };
+    const Json metadata{
+        {"guid", guid.toString()},
+        {"name", name},
+        {"type", "Texture"},
+        {"source", pathToUtf8(textureJson.filename())},
+    };
+    if (!writeJsonFile(textureJson, asset) || !writeJsonFile(meta, metadata)) {
+        logImportFailure(result, "Could not write imported texture metadata.", log);
+        return result;
+    }
+
+    result.success = true;
+    result.asset = AssetData{guid, name, "Texture", textureJson};
+    result.copiedSource = copiedSource;
+    result.metadata = meta;
+    return result;
 }
 
 void AssetRegistry::scan(

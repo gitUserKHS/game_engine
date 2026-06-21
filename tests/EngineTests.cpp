@@ -563,6 +563,64 @@ void testAssetRegistryLoadsGuidAssets() {
     std::filesystem::remove_all(root);
 }
 
+void testAssetImporterCreatesMetaFiles() {
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path() / "cocoa-engine-import-test";
+    const std::filesystem::path external =
+        std::filesystem::temp_directory_path() / "cocoa-engine-import-source";
+    std::filesystem::remove_all(root);
+    std::filesystem::remove_all(external);
+
+    const std::filesystem::path gltf = external / "Props" / "Crate.gltf";
+    const std::filesystem::path texture = external / "Textures" / "Crate.png";
+    writeTextFile(
+        gltf,
+        R"({"asset":{"version":"2.0","generator":"engine-test"},"scenes":[]})"
+    );
+    writeTextFile(texture, "not-a-real-png-yet");
+
+    engine::OutputLog log;
+    const engine::AssetImportResult meshImport =
+        engine::AssetImporter::importGltfAsStaticMesh(gltf, root, &log);
+    require(meshImport.success, "glTF import did not create a StaticMesh asset.");
+    require(
+        std::filesystem::exists(meshImport.copiedSource) &&
+            std::filesystem::exists(meshImport.asset.source) &&
+            std::filesystem::exists(meshImport.metadata),
+        "glTF import did not write expected files."
+    );
+
+    const engine::AssetImportResult textureImport =
+        engine::AssetImporter::importTexture(texture, root, &log);
+    require(textureImport.success, "Texture import did not create a Texture asset.");
+    require(
+        std::filesystem::exists(textureImport.copiedSource) &&
+            std::filesystem::exists(textureImport.asset.source) &&
+            std::filesystem::exists(textureImport.metadata),
+        "Texture import did not write expected files."
+    );
+
+    engine::AssetRegistry registry;
+    registry.scan(root, &log);
+    require(
+        registry.find(meshImport.asset.guid) != nullptr &&
+            registry.find(textureImport.asset.guid) != nullptr,
+        "Imported assets were not discoverable by GUID."
+    );
+    require(
+        registry.findByType("StaticMesh").size() == 1 &&
+            registry.findByType("Texture").size() == 1,
+        "Imported asset types were not indexed."
+    );
+    require(
+        registry.loadStaticMesh(meshImport.asset.guid, &log).has_value(),
+        "Imported glTF-backed StaticMesh could not be loaded."
+    );
+
+    std::filesystem::remove_all(root);
+    std::filesystem::remove_all(external);
+}
+
 } // namespace
 
 int main() {
@@ -581,6 +639,7 @@ int main() {
         testApplicationOptions();
         testPngWriter();
         testAssetRegistryLoadsGuidAssets();
+        testAssetImporterCreatesMetaFiles();
         std::cout << "All engine tests passed.\n";
         return 0;
     } catch (const std::exception& exception) {
