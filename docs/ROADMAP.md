@@ -21,7 +21,7 @@
 - [x] DirectionalLight를 사용하는 기본 Lambert 조명
 - [x] Material과 MaterialInstance 연결
 - [ ] Shadow, Opaque, Debug, UI 렌더 패스
-- [ ] 렌더링 디버그 보기
+- [x] 렌더링 디버그 보기
 
 ## v0.7 Asset Pipeline
 

@@ -654,6 +654,26 @@ const std::vector<DirectionalLightProxy>& RenderScene::lights() const {
     return lights_;
 }
 
+std::size_t RenderScene::opaqueProxyCount() const {
+    return static_cast<std::size_t>(std::count_if(
+        proxies_.begin(),
+        proxies_.end(),
+        [](const RenderProxy& proxy) {
+            return !proxy.wireframe;
+        }
+    ));
+}
+
+std::size_t RenderScene::debugWireProxyCount() const {
+    return static_cast<std::size_t>(std::count_if(
+        proxies_.begin(),
+        proxies_.end(),
+        [](const RenderProxy& proxy) {
+            return proxy.wireframe;
+        }
+    ));
+}
+
 std::size_t RenderScene::updatesLastSync() const {
     return updatesLastSync_;
 }

@@ -114,6 +114,8 @@ public:
     void sync(const World& world);
     [[nodiscard]] const std::vector<RenderProxy>& proxies() const;
     [[nodiscard]] const std::vector<DirectionalLightProxy>& lights() const;
+    [[nodiscard]] std::size_t opaqueProxyCount() const;
+    [[nodiscard]] std::size_t debugWireProxyCount() const;
     [[nodiscard]] std::size_t updatesLastSync() const;
 
 private:

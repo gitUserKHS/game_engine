@@ -917,13 +917,25 @@ void Application::drawOutputLog() {
 void Application::drawDebugPanel() {
     ImGui::Begin("Engine Debug");
     const World& world = runtime_.activeWorld();
+    const RenderScene& scene = world.renderScene();
+    const std::vector<Guid> selectedComponents = selectedRenderComponents();
     ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
     ImGui::Text("Actors: %zu", world.actors().size());
-    ImGui::Text("Render proxies: %zu", world.renderScene().proxies().size());
+    ImGui::Text("Render proxies: %zu", scene.proxies().size());
+    ImGui::Text("Opaque proxies: %zu", scene.opaqueProxyCount());
+    ImGui::Text("Debug wire proxies: %zu", scene.debugWireProxyCount());
+    ImGui::Text("Directional lights: %zu", scene.lights().size());
+    ImGui::Text("Proxy updates: %zu", scene.updatesLastSync());
+    ImGui::SeparatorText("Render Passes");
+    ImGui::TextDisabled("Shadow: planned");
+    ImGui::Text("Opaque: grid + %zu lit mesh proxies", scene.opaqueProxyCount());
     ImGui::Text(
-        "Proxy updates: %zu",
-        world.renderScene().updatesLastSync()
+        "Debug: %zu wire proxies + %zu selection overlays",
+        scene.debugWireProxyCount(),
+        selectedComponents.size()
     );
+    ImGui::TextUnformatted("UI: Dear ImGui dockspace and panels");
+    ImGui::Separator();
     ImGui::Text(
         "Camera cm: %.1f, %.1f, %.1f",
         editorViewport_.position().x,

@@ -245,11 +245,20 @@ void testRenderProxyDirtyUpdate() {
     auto& actor = world.spawnActor<engine::Actor>("Visible");
     auto& mesh = actor.addComponent<engine::StaticMeshComponent>("Mesh");
     actor.setRootComponent(&mesh);
+    auto& debugActor = world.spawnActor<engine::Actor>("DebugBox");
+    auto& debugBox = debugActor.addComponent<engine::BoxComponent>("Box");
+    debugBox.setDrawDebug(true);
+    debugActor.setRootComponent(&debugBox);
 
     world.renderScene().sync(world);
     require(
-        world.renderScene().updatesLastSync() == 1,
+        world.renderScene().updatesLastSync() == 2,
         "Initial proxy was not collected."
+    );
+    require(
+        world.renderScene().opaqueProxyCount() == 1 &&
+            world.renderScene().debugWireProxyCount() == 1,
+        "RenderScene did not classify opaque and debug wire proxies."
     );
     world.renderScene().sync(world);
     require(
@@ -267,10 +276,17 @@ void testRenderProxyDirtyUpdate() {
     material.baseColor = {0.9F, 0.2F, 0.1F};
     mesh.setMaterial(material);
     world.renderScene().sync(world);
+    const auto meshProxy = std::find_if(
+        world.renderScene().proxies().begin(),
+        world.renderScene().proxies().end(),
+        [&](const engine::RenderProxy& proxy) {
+            return proxy.componentGuid == mesh.guid();
+        }
+    );
     require(
         world.renderScene().updatesLastSync() == 1 &&
-            near(world.renderScene().proxies().front().material.baseColor,
-                 material.baseColor),
+            meshProxy != world.renderScene().proxies().end() &&
+            near(meshProxy->material.baseColor, material.baseColor),
         "Material edits did not update the render proxy."
     );
 }

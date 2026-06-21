@@ -13,6 +13,14 @@ GPU 리소스를 만든다”는 책임 분리를 보여주는 첫 구현이다.
 연결한다. 다음 단계에서 실제 glTF vertex/index buffer를 만들 때도 같은 API를
 유지하면 Component 쪽 코드는 크게 바뀌지 않는다.
 
+## v0.9 렌더링 디버그 보기
+
+`Engine Debug` 패널은 `RenderScene`에서 모인 proxy를 Opaque와 Debug Wire로 나누어
+보여 준다. 선택된 물체가 있으면 Selection Overlay 개수도 함께 표시한다. 아직
+정식 RenderGraph는 없지만, 현재 프레임이 `Opaque -> Debug -> UI` 순서로 구성된다는
+감각을 익히기 위한 작은 관찰 창이다. Shadow 패스는 패널에 planned로 남겨 두어
+다음 단계에서 무엇이 비어 있는지 바로 볼 수 있게 했다.
+
 ## 목표
 
 게임 객체가 OpenGL을 직접 호출하지 않고 화면에 그려지는 데이터 흐름을 이해한다.
@@ -53,15 +61,19 @@ flowchart LR
 2. 프로퍼티 setter가 `markRenderStateDirty`를 호출하는지 확인한다.
 3. [`Systems.cpp`](../../src/Systems.cpp)의 `RenderScene::sync`에서 revision 비교를
    찾는다.
-4. [`Renderer.cpp`](../../src/Renderer.cpp)의 `ViewportRenderTarget::resize`에서
+4. `RenderScene::opaqueProxyCount`와 `debugWireProxyCount`에서 Debug 패널 숫자가
+   어떻게 계산되는지 확인한다.
+5. [`Renderer.cpp`](../../src/Renderer.cpp)의 `ViewportRenderTarget::resize`에서
    color texture와 depth renderbuffer가 Viewport 크기에 맞춰지는지 확인한다.
-5. `RenderScene::sync`에서 `DirectionalLightComponent`가 light proxy로 모이는지
+6. `RenderScene::sync`에서 `DirectionalLightComponent`가 light proxy로 모이는지
    확인한다.
-6. `Renderer::renderToTarget`에서 장면과 선택 wireframe을 off-screen target에
+7. `Renderer::renderToTarget`에서 장면과 선택 wireframe을 off-screen target에
    그리는 순서를 읽는다.
-7. [`Application.cpp`](../../src/Application.cpp)의 `drawViewportPanel`에서
+8. [`Application.cpp`](../../src/Application.cpp)의 `drawViewportPanel`에서
    color texture가 `ImGui::Image`로 표시되는지 확인한다.
-8. [`basic.vert`](../../shaders/basic.vert)와
+9. `drawDebugPanel`에서 Opaque, Debug, Selection Overlay, UI 항목이 어떻게 표시되는지
+   확인한다.
+10. [`basic.vert`](../../shaders/basic.vert)와
    [`basic.frag`](../../shaders/basic.frag)에서 GPU 단계의 입력을 확인한다.
 
 ## 실험 과제
@@ -83,5 +95,6 @@ Viewport 패널 너비를 드래그해 framebuffer 크기가 바뀌는지 확인
 
 [`EngineTests.cpp`](../../tests/EngineTests.cpp)의
 `testRenderProxyDirtyUpdate`가 변경된 Component의 proxy만 한 번 갱신되는지
-확인한다. `testDirectionalLightProxy`는 조명 값이 렌더 장면에 복사되는지 확인한다.
+확인하고 Opaque/Debug Wire proxy 개수를 검증한다.
+`testDirectionalLightProxy`는 조명 값이 렌더 장면에 복사되는지 확인한다.
 `testPngWriter`는 RGBA readback의 상하 방향 규칙을 확인한다.
