@@ -191,6 +191,41 @@ void testRenderProxyDirtyUpdate() {
         world.renderScene().updatesLastSync() == 1,
         "Dirty transform did not update proxy."
     );
+
+    engine::MaterialInstance material;
+    material.baseColor = {0.9F, 0.2F, 0.1F};
+    mesh.setMaterial(material);
+    world.renderScene().sync(world);
+    require(
+        world.renderScene().updatesLastSync() == 1 &&
+            near(world.renderScene().proxies().front().material.baseColor,
+                 material.baseColor),
+        "Material edits did not update the render proxy."
+    );
+}
+
+void testDirectionalLightProxy() {
+    engine::World world;
+    auto& actor = world.spawnActor<engine::Actor>("Sun");
+    auto& light = actor.addComponent<engine::DirectionalLightComponent>("Light");
+    actor.setRootComponent(&light);
+    light.setRelativeRotation({0.0F, -45.0F, -35.0F});
+    light.setColor({0.8F, 0.7F, 0.6F});
+    light.setIntensity(2.0F);
+
+    world.renderScene().sync(world);
+    require(
+        world.renderScene().lights().size() == 1,
+        "Directional light was not collected by RenderScene."
+    );
+    const engine::DirectionalLightProxy& proxy = world.renderScene().lights().front();
+    require(
+        proxy.componentGuid == light.guid() &&
+            near(glm::length(proxy.direction), 1.0F) &&
+            near(proxy.color, {0.8F, 0.7F, 0.6F}) &&
+            near(proxy.intensity, 2.0F),
+        "Directional light proxy values were not preserved."
+    );
 }
 
 void testCharacterCameraSeesPlayer() {
@@ -475,6 +510,7 @@ int main() {
         testReflectionAndSerialization();
         testPieIsolation();
         testRenderProxyDirtyUpdate();
+        testDirectionalLightProxy();
         testCharacterCameraSeesPlayer();
         testEditorViewportMath();
         testRenderProxyPicking();

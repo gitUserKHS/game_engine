@@ -13,6 +13,7 @@
 - Actor 생성·복제·삭제와 snapshot 기반 Undo/Redo
 - 자유 도킹 패널과 `Saved/Editor/imgui.ini` 배치 저장
 - `F9` 및 CLI editor/viewport PNG와 JSON metadata 캡처
+- `DirectionalLightComponent` 기반 기본 Lambert 조명과 MaterialInstance 색 반영
 - 카메라, picking, snapshot 복원, CLI, PNG 방향 테스트
 - 에디터 첫 실습과 AI 시각 테스트 한국어 문서
 

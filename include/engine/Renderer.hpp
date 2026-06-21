@@ -78,7 +78,11 @@ private:
     static unsigned int createProgram();
     void createCubeMesh();
     void createGridMesh(float halfExtent, float spacing);
-    void drawCubeModel(const glm::mat4& model, const glm::vec3& color) const;
+    void drawCubeModel(
+        const glm::mat4& model,
+        const glm::vec3& color,
+        bool lit
+    ) const;
 
     unsigned int program_{0};
     unsigned int cubeVao_{0};
@@ -88,8 +92,15 @@ private:
     unsigned int gridVbo_{0};
     int gridVertexCount_{0};
     int mvpLocation_{-1};
+    int modelLocation_{-1};
     int colorLocation_{-1};
+    int lightDirectionLocation_{-1};
+    int lightColorLocation_{-1};
+    int lightIntensityLocation_{-1};
+    int ambientLocation_{-1};
+    int lightingEnabledLocation_{-1};
     glm::mat4 viewProjection_{1.0F};
+    mutable DirectionalLightProxy activeLight_;
 };
 
 } // namespace engine

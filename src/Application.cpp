@@ -215,13 +215,16 @@ bool Application::initialize() {
 
 void Application::shutdown() {
     runtime_.stop();
+    if (window_ != nullptr) {
+        glfwMakeContextCurrent(window_);
+    }
+    viewportTarget_.reset();
+    renderer_.reset();
     if (ImGui::GetCurrentContext() != nullptr) {
         ImGui_ImplOpenGL3_Shutdown();
         ImGui_ImplGlfw_Shutdown();
         ImGui::DestroyContext();
     }
-    viewportTarget_.reset();
-    renderer_.reset();
     if (window_ != nullptr) {
         glfwDestroyWindow(window_);
         window_ = nullptr;

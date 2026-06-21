@@ -130,7 +130,13 @@ std::vector<unsigned char> ViewportRenderTarget::readRgba() const {
 Renderer::Renderer()
     : program_(createProgram()) {
     mvpLocation_ = glGetUniformLocation(program_, "uMVP");
+    modelLocation_ = glGetUniformLocation(program_, "uModel");
     colorLocation_ = glGetUniformLocation(program_, "uColor");
+    lightDirectionLocation_ = glGetUniformLocation(program_, "uLightDirection");
+    lightColorLocation_ = glGetUniformLocation(program_, "uLightColor");
+    lightIntensityLocation_ = glGetUniformLocation(program_, "uLightIntensity");
+    ambientLocation_ = glGetUniformLocation(program_, "uAmbient");
+    lightingEnabledLocation_ = glGetUniformLocation(program_, "uLightingEnabled");
     createCubeMesh();
     createGridMesh(1000.0F, 100.0F);
 }
@@ -166,13 +172,23 @@ void Renderer::beginFrame(
 }
 
 void Renderer::render(const RenderScene& scene) const {
+    if (!scene.lights().empty()) {
+        activeLight_ = scene.lights().front();
+    } else {
+        activeLight_ = DirectionalLightProxy{};
+    }
+
     drawGrid();
     for (const RenderProxy& proxy : scene.proxies()) {
         if (proxy.wireframe) {
             glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
             glLineWidth(2.0F);
         }
-        drawCubeModel(proxy.worldMatrix, proxy.material.baseColor);
+        drawCubeModel(
+            proxy.worldMatrix,
+            proxy.material.baseColor,
+            !proxy.wireframe
+        );
         if (proxy.wireframe) {
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         }
@@ -204,7 +220,8 @@ void Renderer::renderToTarget(
             if (selected.contains(proxy.componentGuid)) {
                 drawCubeModel(
                     glm::scale(proxy.worldMatrix, glm::vec3{1.015F}),
-                    {1.0F, 0.72F, 0.12F}
+                    {1.0F, 0.72F, 0.12F},
+                    false
                 );
             }
         }
@@ -246,27 +263,41 @@ std::vector<unsigned char> Renderer::readBackbufferRgba(
 
 void Renderer::drawCubeModel(
     const glm::mat4& model,
-    const glm::vec3& color
+    const glm::vec3& color,
+    bool lit
 ) const {
     const glm::mat4 mvp = viewProjection_ * model;
 
     glUseProgram(program_);
     glUniformMatrix4fv(mvpLocation_, 1, GL_FALSE, glm::value_ptr(mvp));
+    glUniformMatrix4fv(modelLocation_, 1, GL_FALSE, glm::value_ptr(model));
     glUniform3fv(colorLocation_, 1, glm::value_ptr(color));
+    glUniform3fv(
+        lightDirectionLocation_,
+        1,
+        glm::value_ptr(activeLight_.direction)
+    );
+    glUniform3fv(lightColorLocation_, 1, glm::value_ptr(activeLight_.color));
+    glUniform1f(lightIntensityLocation_, activeLight_.intensity);
+    glUniform1f(ambientLocation_, 0.22F);
+    glUniform1i(lightingEnabledLocation_, lit ? 1 : 0);
     glBindVertexArray(cubeVao_);
     glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, nullptr);
 }
 
 void Renderer::drawGrid() const {
     glUseProgram(program_);
+    const glm::mat4 model{1.0F};
     glUniformMatrix4fv(
         mvpLocation_,
         1,
         GL_FALSE,
         glm::value_ptr(viewProjection_)
     );
+    glUniformMatrix4fv(modelLocation_, 1, GL_FALSE, glm::value_ptr(model));
     const glm::vec3 color{0.38F, 0.44F, 0.48F};
     glUniform3fv(colorLocation_, 1, glm::value_ptr(color));
+    glUniform1i(lightingEnabledLocation_, 0);
     glBindVertexArray(gridVao_);
     glDrawArrays(GL_LINES, 0, gridVertexCount_);
 }
