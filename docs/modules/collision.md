@@ -1,5 +1,12 @@
 # 충돌
 
+## v0.8 Collision Channel 편집
+
+`BoxComponent`를 선택하면 Details 패널에서 `ObjectChannel`을 숫자가 아니라
+`WorldStatic`, `WorldDynamic`, `Pawn`, `Visibility`, `Camera` 콤보로 바꿀 수 있다.
+내부 저장은 reflection 호환을 위해 integer property를 그대로 사용하지만, UI는
+초보자가 채널 의미를 바로 볼 수 있게 이름으로 보여준다.
+
 ## 목표
 
 BoxComponent가 만드는 AABB와 Block/Overlap/Ignore 응답, query와 이동 해결 과정을

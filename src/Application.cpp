@@ -52,6 +52,24 @@ const char* modeName(engine::EditorMode mode) {
     return "Unknown";
 }
 
+const char* collisionChannelName(int channel) {
+    switch (static_cast<engine::CollisionChannel>(channel)) {
+    case engine::CollisionChannel::WorldStatic:
+        return "WorldStatic";
+    case engine::CollisionChannel::WorldDynamic:
+        return "WorldDynamic";
+    case engine::CollisionChannel::Pawn:
+        return "Pawn";
+    case engine::CollisionChannel::Visibility:
+        return "Visibility";
+    case engine::CollisionChannel::Camera:
+        return "Camera";
+    case engine::CollisionChannel::Count:
+        break;
+    }
+    return "Unknown";
+}
+
 std::string timestampText() {
     const auto now = std::chrono::system_clock::now();
     const std::time_t time = std::chrono::system_clock::to_time_t(now);
@@ -762,7 +780,37 @@ void Application::drawDetails() {
                 1.0F
             );
         } else if (auto* integerValue = std::get_if<int>(&after)) {
-            changed = ImGui::DragInt(property->name.c_str(), integerValue);
+            if (property->name == "ObjectChannel") {
+                int current = std::clamp(
+                    *integerValue,
+                    0,
+                    static_cast<int>(CollisionChannel::Count) - 1
+                );
+                if (ImGui::BeginCombo(
+                        property->name.c_str(),
+                        collisionChannelName(current)
+                    )) {
+                    for (int channel = 0;
+                         channel < static_cast<int>(CollisionChannel::Count);
+                         ++channel) {
+                        const bool selected = current == channel;
+                        if (ImGui::Selectable(
+                                collisionChannelName(channel),
+                                selected
+                            )) {
+                            current = channel;
+                            *integerValue = channel;
+                            changed = true;
+                        }
+                        if (selected) {
+                            ImGui::SetItemDefaultFocus();
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+            } else {
+                changed = ImGui::DragInt(property->name.c_str(), integerValue);
+            }
         } else if (auto* vectorValue = std::get_if<glm::vec3>(&after)) {
             changed = ImGui::DragFloat3(
                 property->name.c_str(),

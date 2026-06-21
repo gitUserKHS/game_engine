@@ -37,7 +37,7 @@
 - [x] InputAction/InputAxis 설정 파일
 - [ ] SpringArm 카메라 충돌
 - [ ] Character sweep와 계단 이동 개선
-- [ ] collision channel 편집 UI
+- [x] collision channel 편집 UI
 
 ## v0.9 Gameplay Tools
 
