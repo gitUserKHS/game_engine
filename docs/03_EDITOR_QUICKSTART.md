@@ -5,6 +5,11 @@
 
 ## 1. 에디터 실행
 
+Content Browser의 `Source Path`에 외부 `.gltf`, `.glb`, `.png`, `.jpg`, `.bmp`,
+`.tga` 파일 경로를 넣고 `Import`를 누르면 `Content/Imported/` 아래에 에셋과
+`.meta`가 만들어진다. `Rescan Content`는 이미 있는 `.meta`를 다시 읽어 목록을
+갱신한다.
+
 Visual Studio의 **Developer PowerShell for VS**에서 저장소 루트로 이동한 뒤:
 
 ```powershell

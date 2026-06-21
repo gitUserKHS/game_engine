@@ -3,6 +3,7 @@
 #include "engine/Editor.hpp"
 #include "engine/Gameplay.hpp"
 
+#include <array>
 #include <memory>
 #include <optional>
 #include <string>
@@ -72,6 +73,8 @@ private:
     void deleteSelection();
     void undo();
     void redo();
+    void importAssetFromPath(std::string_view pathText);
+    void rescanAssets();
 
     void queueManualScreenshot();
     void processScreenshot(
@@ -106,6 +109,7 @@ private:
     Transform gizmoBefore_;
     std::optional<PendingPropertyEdit> pendingPropertyEdit_;
     std::optional<ScreenshotRequest> pendingScreenshot_;
+    std::array<char, 512> importPathBuffer_{};
     std::string imguiIniPath_;
     float frameDeltaTime_{0.0F};
     std::uint64_t renderedFrames_{0};

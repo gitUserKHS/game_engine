@@ -8,6 +8,7 @@
 ### Added
 
 - Texture asset GUID metadata load와 요청 시 OpenGL texture cache 생성 API
+- Content Browser의 외부 glTF/texture 경로 입력 import와 Content rescan 버튼
 
 - 크기 조절 가능한 OpenGL framebuffer 기반 ImGui Viewport
 - Unreal 방식 에디터 카메라, visible proxy 클릭 선택, 선택 wireframe

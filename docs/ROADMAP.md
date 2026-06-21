@@ -30,7 +30,7 @@
 - [x] glTF와 texture import API
 - [x] 요청 시 Texture GPU resource 생성
 - [ ] StaticMesh GPU resource 생성
-- [ ] Content Browser import 흐름
+- [x] Content Browser import 흐름
 
 ## v0.8 Gameplay Framework
 

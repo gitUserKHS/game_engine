@@ -20,6 +20,7 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cctype>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -82,6 +83,16 @@ std::string pathToUtf8(const std::filesystem::path& path) {
         reinterpret_cast<const char*>(utf8.data()),
         utf8.size(),
     };
+}
+
+std::string extensionLower(const std::filesystem::path& path) {
+    std::string extension = path.extension().string();
+    for (char& character : extension) {
+        character = static_cast<char>(
+            std::tolower(static_cast<unsigned char>(character))
+        );
+    }
+    return extension;
 }
 
 std::filesystem::path pngPath(
@@ -804,6 +815,26 @@ void Application::drawDetails() {
 
 void Application::drawContentBrowser() {
     ImGui::Begin("Content Browser");
+    const bool editing = runtime_.mode() == EditorMode::Edit;
+    ImGui::TextUnformatted("Import external .gltf/.glb or image files.");
+    ImGui::InputText(
+        "Source Path",
+        importPathBuffer_.data(),
+        importPathBuffer_.size()
+    );
+    ImGui::BeginDisabled(!editing);
+    if (ImGui::Button("Import")) {
+        importAssetFromPath(importPathBuffer_.data());
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Rescan Content")) {
+        rescanAssets();
+    }
+    ImGui::EndDisabled();
+    if (!editing) {
+        ImGui::TextUnformatted("Import is available in Edit mode.");
+    }
+    ImGui::Separator();
     for (const AssetData& asset : runtime_.assets().assets()) {
         ImGui::BulletText(
             "%s [%s]",
@@ -1164,6 +1195,55 @@ void Application::redo() {
         }
         pendingPropertyEdit_.reset();
     }
+}
+
+void Application::importAssetFromPath(std::string_view pathText) {
+    const std::string text{pathText};
+    if (text.empty()) {
+        runtime_.log().write("Import path is empty.");
+        return;
+    }
+
+    const std::filesystem::path source = pathFromUtf8(text);
+    const std::string extension = extensionLower(source);
+    AssetImportResult result;
+    if (extension == ".gltf" || extension == ".glb") {
+        result = AssetImporter::importGltfAsStaticMesh(
+            source,
+            ENGINE_CONTENT_DIR,
+            &runtime_.log()
+        );
+    } else if (
+        extension == ".png" || extension == ".jpg" ||
+        extension == ".jpeg" || extension == ".bmp" ||
+        extension == ".tga"
+    ) {
+        result = AssetImporter::importTexture(
+            source,
+            ENGINE_CONTENT_DIR,
+            &runtime_.log()
+        );
+    } else {
+        runtime_.log().write(
+            "Import supports .gltf, .glb, .png, .jpg, .jpeg, .bmp, and .tga."
+        );
+        return;
+    }
+
+    if (!result.success) {
+        runtime_.log().write("Import failed: " + text);
+        return;
+    }
+
+    rescanAssets();
+    runtime_.log().write(
+        "Imported " + result.asset.name + " as " + result.asset.type + "."
+    );
+}
+
+void Application::rescanAssets() {
+    runtime_.assets().scan(ENGINE_CONTENT_DIR, &runtime_.log());
+    runtime_.log().write("Content assets rescanned.");
 }
 
 void Application::queueManualScreenshot() {
