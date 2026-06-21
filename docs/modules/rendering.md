@@ -1,5 +1,13 @@
 # 렌더링
 
+## v0.7 Texture GPU Resource
+
+`Renderer::textureFor`는 `TextureAsset`의 이미지 파일을 `stb_image`로 읽고,
+OpenGL 2D texture와 mipmap을 만든 뒤 GUID 기준 캐시에 보관한다. 같은 texture를
+다시 요청하면 GPU 업로드를 반복하지 않고 기존 `TextureGpuResource`를 돌려준다.
+이 단계는 “Asset Registry는 메타데이터와 CPU 설명을 읽고, Renderer는 필요할 때
+GPU 리소스를 만든다”는 책임 분리를 보여주는 첫 구현이다.
+
 ## 목표
 
 게임 객체가 OpenGL을 직접 호출하지 않고 화면에 그려지는 데이터 흐름을 이해한다.

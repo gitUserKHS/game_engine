@@ -169,6 +169,12 @@ struct MaterialAsset {
     MaterialInstance material;
 };
 
+struct TextureAsset {
+    Guid guid;
+    std::filesystem::path source;
+    std::string sourceFormat;
+};
+
 struct AssetImportResult {
     bool success{false};
     AssetData asset;
@@ -207,6 +213,10 @@ public:
         OutputLog* log = nullptr
     ) const;
     [[nodiscard]] std::optional<MaterialAsset> loadMaterial(
+        Guid guid,
+        OutputLog* log = nullptr
+    ) const;
+    [[nodiscard]] std::optional<TextureAsset> loadTexture(
         Guid guid,
         OutputLog* log = nullptr
     ) const;

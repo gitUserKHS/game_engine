@@ -616,6 +616,14 @@ void testAssetImporterCreatesMetaFiles() {
         registry.loadStaticMesh(meshImport.asset.guid, &log).has_value(),
         "Imported glTF-backed StaticMesh could not be loaded."
     );
+    const auto textureAsset = registry.loadTexture(textureImport.asset.guid, &log);
+    require(
+        textureAsset.has_value() &&
+            textureAsset->guid == textureImport.asset.guid &&
+            std::filesystem::exists(textureAsset->source) &&
+            textureAsset->sourceFormat == "png",
+        "Imported Texture could not be loaded from GUID metadata."
+    );
 
     std::filesystem::remove_all(root);
     std::filesystem::remove_all(external);

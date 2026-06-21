@@ -876,6 +876,37 @@ std::optional<MaterialAsset> AssetRegistry::loadMaterial(
     return MaterialAsset{asset->guid, material};
 }
 
+std::optional<TextureAsset> AssetRegistry::loadTexture(
+    Guid guid,
+    OutputLog* log
+) const {
+    const AssetData* asset = find(guid);
+    if (asset == nullptr || asset->type != "Texture") {
+        if (log != nullptr) {
+            log->write("Texture asset GUID was not found.");
+        }
+        return std::nullopt;
+    }
+
+    const std::optional<Json> json = readJsonFile(asset->source, log);
+    if (!json.has_value()) {
+        return std::nullopt;
+    }
+
+    const std::string source = json->value("source", std::string{});
+    if (source.empty()) {
+        if (log != nullptr) {
+            log->write("Texture asset has no source image.");
+        }
+        return std::nullopt;
+    }
+    return TextureAsset{
+        asset->guid,
+        asset->source.parent_path() / source,
+        json->value("sourceFormat", std::string{}),
+    };
+}
+
 std::string WorldSerializer::toJson(const World& world) {
     Json root{
         {"version", 1},

@@ -28,7 +28,8 @@
 - [x] GUID 기반 asset handle
 - [x] StaticMesh와 Material JSON 에셋 CPU 로딩
 - [x] glTF와 texture import API
-- [ ] 요청 시 GPU resource 생성
+- [x] 요청 시 Texture GPU resource 생성
+- [ ] StaticMesh GPU resource 생성
 - [ ] Content Browser import 흐름
 
 ## v0.8 Gameplay Framework

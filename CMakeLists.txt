@@ -114,7 +114,7 @@ add_executable(topdown_engine
     src/Renderer.cpp
 )
 
-target_include_directories(topdown_engine PRIVATE include)
+target_include_directories(topdown_engine PRIVATE include ${stb_SOURCE_DIR})
 target_compile_definitions(
     topdown_engine
     PRIVATE ENGINE_SHADER_DIR=L"${CMAKE_CURRENT_SOURCE_DIR}/shaders"

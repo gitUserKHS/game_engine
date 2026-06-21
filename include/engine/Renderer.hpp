@@ -6,13 +6,24 @@
 #include <glm/vec3.hpp>
 
 #include <filesystem>
+#include <optional>
 #include <span>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace engine {
 
 class RenderScene;
+struct TextureAsset;
+
+struct TextureGpuResource {
+    Guid guid;
+    unsigned int texture{0};
+    int width{0};
+    int height{0};
+    int channels{0};
+};
 
 /// ImGui Viewport에 표시할 color texture와 depth buffer를 소유한다.
 class ViewportRenderTarget {
@@ -71,6 +82,10 @@ public:
         int width,
         int height
     ) const;
+    [[nodiscard]] const TextureGpuResource* textureFor(
+        const TextureAsset& asset,
+        std::string* error = nullptr
+    );
 
 private:
     static unsigned int compileShader(unsigned int type, const std::string& source);
@@ -101,6 +116,7 @@ private:
     int lightingEnabledLocation_{-1};
     glm::mat4 viewProjection_{1.0F};
     mutable DirectionalLightProxy activeLight_;
+    std::unordered_map<Guid, TextureGpuResource> textureCache_;
 };
 
 } // namespace engine

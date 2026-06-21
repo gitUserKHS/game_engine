@@ -1,5 +1,16 @@
 # Asset과 Serialization
 
+## v0.7 Texture Asset 흐름
+
+`AssetImporter::importTexture`는 외부 이미지 파일을 `Content/Imported/Textures`
+아래로 복사하고, `.texture.json`과 `.meta`를 만든다. 이후
+`AssetRegistry::loadTexture`는 GUID로 이 JSON을 찾아 `TextureAsset`을 반환한다.
+
+`TextureAsset`은 아직 GPU 객체가 아니라 CPU 쪽 설명서에 가깝다. 실제 OpenGL
+texture는 렌더러가 필요할 때 `Renderer::textureFor`에서 한 번 생성하고 캐시에
+보관한다. 이렇게 나누면 Content 스캔은 빠르게 끝나고, GPU 리소스는 화면에
+필요해지는 순간에만 만들어진다.
+
 ## 목표
 
 Content 폴더의 파일을 GUID로 식별하고, World 객체와 프로퍼티를 JSON으로

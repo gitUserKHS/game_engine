@@ -7,6 +7,8 @@
 
 ### Added
 
+- Texture asset GUID metadata load와 요청 시 OpenGL texture cache 생성 API
+
 - 크기 조절 가능한 OpenGL framebuffer 기반 ImGui Viewport
 - Unreal 방식 에디터 카메라, visible proxy 클릭 선택, 선택 wireframe
 - ImGuizmo 이동·회전·크기 편집, Local/World, snapping

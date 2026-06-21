@@ -4,6 +4,10 @@
 
 #include <glad/gl.h>
 
+#define STBI_WINDOWS_UTF8
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
+
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
@@ -19,6 +23,18 @@
 #endif
 
 namespace engine {
+
+namespace {
+
+std::string pathToUtf8(const std::filesystem::path& path) {
+    const std::u8string utf8 = path.u8string();
+    return {
+        reinterpret_cast<const char*>(utf8.data()),
+        utf8.size(),
+    };
+}
+
+} // namespace
 
 ViewportRenderTarget::ViewportRenderTarget() {
     glGenFramebuffers(1, &framebuffer_);
@@ -142,6 +158,10 @@ Renderer::Renderer()
 }
 
 Renderer::~Renderer() {
+    for (const auto& [guid, resource] : textureCache_) {
+        (void)guid;
+        glDeleteTextures(1, &resource.texture);
+    }
     glDeleteBuffers(1, &gridVbo_);
     glDeleteVertexArrays(1, &gridVao_);
     glDeleteBuffers(1, &cubeEbo_);
@@ -259,6 +279,70 @@ std::vector<unsigned char> Renderer::readBackbufferRgba(
         pixels.data()
     );
     return pixels;
+}
+
+const TextureGpuResource* Renderer::textureFor(
+    const TextureAsset& asset,
+    std::string* error
+) {
+    const auto cached = textureCache_.find(asset.guid);
+    if (cached != textureCache_.end()) {
+        return &cached->second;
+    }
+
+    stbi_set_flip_vertically_on_load(1);
+    int width = 0;
+    int height = 0;
+    int channels = 0;
+    const std::string utf8Path = pathToUtf8(asset.source);
+    unsigned char* pixels = stbi_load(
+        utf8Path.c_str(),
+        &width,
+        &height,
+        &channels,
+        4
+    );
+    if (pixels == nullptr) {
+        if (error != nullptr) {
+            *error = "Could not load texture image: " + utf8Path;
+        }
+        return nullptr;
+    }
+
+    unsigned int texture = 0;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage2D(
+        GL_TEXTURE_2D,
+        0,
+        GL_RGBA8,
+        width,
+        height,
+        0,
+        GL_RGBA,
+        GL_UNSIGNED_BYTE,
+        pixels
+    );
+    glGenerateMipmap(GL_TEXTURE_2D);
+    stbi_image_free(pixels);
+
+    auto [iterator, inserted] = textureCache_.emplace(
+        asset.guid,
+        TextureGpuResource{
+            asset.guid,
+            texture,
+            width,
+            height,
+            channels,
+        }
+    );
+    (void)inserted;
+    return &iterator->second;
 }
 
 void Renderer::drawCubeModel(
