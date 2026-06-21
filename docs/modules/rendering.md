@@ -15,11 +15,11 @@ GPU 리소스를 만든다”는 책임 분리를 보여주는 첫 구현이다.
 
 ## v0.9 렌더링 디버그 보기
 
-`Engine Debug` 패널은 `RenderScene`에서 모인 proxy를 Opaque와 Debug Wire로 나누어
-보여 준다. 선택된 물체가 있으면 Selection Overlay 개수도 함께 표시한다. 아직
-정식 RenderGraph는 없지만, 현재 프레임이 `Opaque -> Debug -> UI` 순서로 구성된다는
-감각을 익히기 위한 작은 관찰 창이다. Shadow 패스는 패널에 planned로 남겨 두어
-다음 단계에서 무엇이 비어 있는지 바로 볼 수 있게 했다.
+`Renderer`는 매 Viewport 렌더 후 `RenderPassRecord` 목록을 남긴다. `Engine Debug`
+패널은 이 기록을 읽어 Shadow, Opaque, Debug, UI 패스 이름과 draw 수를 보여 준다.
+아직 정식 RenderGraph는 없지만, 현재 프레임이 어떤 제출 순서로 구성되는지 익히기
+위한 작은 관찰 창이다. Shadow 패스는 `planned`로 남겨 두어 다음 단계에서 무엇이
+비어 있는지 바로 볼 수 있게 했다.
 
 ## 목표
 
@@ -36,6 +36,7 @@ Component의 상태를 값 데이터로 복사하면 두 영역의 책임이 선
 - [`StaticMeshComponent`](../../include/engine/Components.hpp): 현재 큐브 proxy 생성
 - [`RenderProxy`](../../include/engine/RenderTypes.hpp): 렌더러용 불변 값 묶음
 - [`RenderScene`](../../include/engine/Systems.hpp): proxy와 revision 관리
+- [`RenderPassRecord`](../../include/engine/Renderer.hpp): 마지막 프레임의 패스 기록
 - [`Renderer`](../../include/engine/Renderer.hpp): OpenGL 리소스와 draw call
 - [`ViewportRenderTarget`](../../include/engine/Renderer.hpp): color/depth framebuffer
 - [`DirectionalLightComponent`](../../include/engine/Components.hpp): 방향성 조명 값
@@ -71,8 +72,8 @@ flowchart LR
    그리는 순서를 읽는다.
 8. [`Application.cpp`](../../src/Application.cpp)의 `drawViewportPanel`에서
    color texture가 `ImGui::Image`로 표시되는지 확인한다.
-9. `drawDebugPanel`에서 Opaque, Debug, Selection Overlay, UI 항목이 어떻게 표시되는지
-   확인한다.
+9. `Renderer::lastPasses`와 `drawDebugPanel`에서 Shadow, Opaque, Debug, UI 패스 기록이
+   어떻게 표시되는지 확인한다.
 10. [`basic.vert`](../../shaders/basic.vert)와
    [`basic.frag`](../../shaders/basic.frag)에서 GPU 단계의 입력을 확인한다.
 

@@ -33,6 +33,20 @@ struct TextureGpuResource {
     int channels{0};
 };
 
+enum class RenderPassKind {
+    Shadow,
+    Opaque,
+    Debug,
+    UI,
+};
+
+struct RenderPassRecord {
+    RenderPassKind kind{RenderPassKind::Opaque};
+    std::string name;
+    std::size_t drawCount{0};
+    bool implemented{true};
+};
+
 /// ImGui Viewport에 표시할 color texture와 depth buffer를 소유한다.
 class ViewportRenderTarget {
 public:
@@ -98,6 +112,8 @@ public:
         const StaticMeshAsset& asset,
         std::string* error = nullptr
     );
+    [[nodiscard]] const std::vector<RenderPassRecord>& lastPasses() const;
+    void recordUiPass(std::size_t drawCount);
 
 private:
     static unsigned int compileShader(unsigned int type, const std::string& source);
@@ -109,6 +125,13 @@ private:
         const glm::mat4& model,
         const glm::vec3& color,
         bool lit
+    ) const;
+    void beginPassRecording() const;
+    void recordPass(
+        RenderPassKind kind,
+        std::string name,
+        std::size_t drawCount,
+        bool implemented = true
     ) const;
 
     unsigned int program_{0};
@@ -128,6 +151,8 @@ private:
     int lightingEnabledLocation_{-1};
     glm::mat4 viewProjection_{1.0F};
     mutable DirectionalLightProxy activeLight_;
+    mutable std::vector<RenderPassRecord> lastPasses_;
+    std::size_t lastUiDrawCount_{0};
     std::unordered_map<Guid, MeshGpuResource> meshCache_;
     std::unordered_map<Guid, TextureGpuResource> textureCache_;
 };

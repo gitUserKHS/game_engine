@@ -199,10 +199,15 @@ void Renderer::render(const RenderScene& scene) const {
     }
 
     drawGrid();
+    std::size_t opaqueDraws = 1;
+    std::size_t debugDraws = 0;
     for (const RenderProxy& proxy : scene.proxies()) {
         if (proxy.wireframe) {
             glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
             glLineWidth(2.0F);
+            ++debugDraws;
+        } else {
+            ++opaqueDraws;
         }
         drawCubeModel(
             proxy.worldMatrix,
@@ -213,6 +218,8 @@ void Renderer::render(const RenderScene& scene) const {
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         }
     }
+    recordPass(RenderPassKind::Opaque, "Opaque", opaqueDraws);
+    recordPass(RenderPassKind::Debug, "Debug Wire", debugDraws);
 }
 
 void Renderer::renderToTarget(
@@ -222,6 +229,8 @@ void Renderer::renderToTarget(
     std::span<const Guid> selectedComponents
 ) {
     target.bind();
+    beginPassRecording();
+    recordPass(RenderPassKind::Shadow, "Shadow", 0, false);
     glViewport(0, 0, target.width(), target.height());
     glEnable(GL_DEPTH_TEST);
     glClearColor(0.08F, 0.10F, 0.14F, 1.0F);
@@ -236,6 +245,7 @@ void Renderer::renderToTarget(
         };
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
         glLineWidth(3.0F);
+        std::size_t selectionDraws = 0;
         for (const RenderProxy& proxy : scene.proxies()) {
             if (selected.contains(proxy.componentGuid)) {
                 drawCubeModel(
@@ -243,12 +253,56 @@ void Renderer::renderToTarget(
                     {1.0F, 0.72F, 0.12F},
                     false
                 );
+                ++selectionDraws;
             }
         }
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         glLineWidth(1.0F);
+        recordPass(RenderPassKind::Debug, "Selection Overlay", selectionDraws);
+    } else {
+        recordPass(RenderPassKind::Debug, "Selection Overlay", 0);
     }
+    recordPass(RenderPassKind::UI, "Dear ImGui UI", lastUiDrawCount_);
     ViewportRenderTarget::unbind();
+}
+
+const std::vector<RenderPassRecord>& Renderer::lastPasses() const {
+    return lastPasses_;
+}
+
+void Renderer::recordUiPass(std::size_t drawCount) {
+    lastUiDrawCount_ = drawCount;
+    const auto found = std::find_if(
+        lastPasses_.begin(),
+        lastPasses_.end(),
+        [](const RenderPassRecord& pass) {
+            return pass.kind == RenderPassKind::UI;
+        }
+    );
+    if (found != lastPasses_.end()) {
+        found->drawCount = drawCount;
+        return;
+    }
+
+    recordPass(RenderPassKind::UI, "Dear ImGui UI", drawCount);
+}
+
+void Renderer::beginPassRecording() const {
+    lastPasses_.clear();
+}
+
+void Renderer::recordPass(
+    RenderPassKind kind,
+    std::string name,
+    std::size_t drawCount,
+    bool implemented
+) const {
+    lastPasses_.push_back({
+        kind,
+        std::move(name),
+        drawCount,
+        implemented,
+    });
 }
 
 void Renderer::clearBackbuffer(int width, int height) const {

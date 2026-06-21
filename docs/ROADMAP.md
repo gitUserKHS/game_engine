@@ -20,7 +20,7 @@
 - [x] 도킹 레이아웃과 자동 시각 테스트 캡처
 - [x] DirectionalLight를 사용하는 기본 Lambert 조명
 - [x] Material과 MaterialInstance 연결
-- [ ] Shadow, Opaque, Debug, UI 렌더 패스
+- [ ] Shadow, Opaque, Debug, UI 렌더 패스 기록과 실제 Shadow 렌더
 - [x] 렌더링 디버그 보기
 
 ## v0.7 Asset Pipeline

@@ -52,6 +52,34 @@ const char* modeName(engine::EditorMode mode) {
     return "Unknown";
 }
 
+const char* renderPassKindName(engine::RenderPassKind kind) {
+    switch (kind) {
+    case engine::RenderPassKind::Shadow:
+        return "Shadow";
+    case engine::RenderPassKind::Opaque:
+        return "Opaque";
+    case engine::RenderPassKind::Debug:
+        return "Debug";
+    case engine::RenderPassKind::UI:
+        return "UI";
+    }
+    return "Unknown";
+}
+
+std::size_t imguiDrawCommandCount(const ImDrawData* drawData) {
+    if (drawData == nullptr) {
+        return 0;
+    }
+
+    std::size_t count = 0;
+    for (int listIndex = 0; listIndex < drawData->CmdListsCount; ++listIndex) {
+        count += static_cast<std::size_t>(
+            drawData->CmdLists[listIndex]->CmdBuffer.Size
+        );
+    }
+    return count;
+}
+
 const char* collisionChannelName(int channel) {
     switch (static_cast<engine::CollisionChannel>(channel)) {
     case engine::CollisionChannel::WorldStatic:
@@ -149,11 +177,11 @@ Application::Application(ApplicationOptions options)
     registerEngineTypes();
     createDemoWorld();
     runtime_.assets().scan(ENGINE_CONTENT_DIR, &runtime_.log());
-    runtime_.input().loadConfig(
+    static_cast<void>(runtime_.input().loadConfig(
         std::filesystem::path{ENGINE_CONTENT_DIR} /
             "Input" / "default.input.json",
         &runtime_.log()
-    );
+    ));
 }
 
 Application::~Application() {
@@ -415,6 +443,7 @@ void Application::render() {
 
     renderer_->clearBackbuffer(framebufferWidth, framebufferHeight);
     ImGui::Render();
+    renderer_->recordUiPass(imguiDrawCommandCount(ImGui::GetDrawData()));
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
     ++renderedFrames_;
@@ -927,14 +956,20 @@ void Application::drawDebugPanel() {
     ImGui::Text("Directional lights: %zu", scene.lights().size());
     ImGui::Text("Proxy updates: %zu", scene.updatesLastSync());
     ImGui::SeparatorText("Render Passes");
-    ImGui::TextDisabled("Shadow: planned");
-    ImGui::Text("Opaque: grid + %zu lit mesh proxies", scene.opaqueProxyCount());
     ImGui::Text(
-        "Debug: %zu wire proxies + %zu selection overlays",
-        scene.debugWireProxyCount(),
+        "Selection overlays this frame: %zu",
         selectedComponents.size()
     );
-    ImGui::TextUnformatted("UI: Dear ImGui dockspace and panels");
+    for (const RenderPassRecord& pass : renderer_->lastPasses()) {
+        const char* state = pass.implemented ? "ready" : "planned";
+        ImGui::Text(
+            "%s / %s: %zu draws (%s)",
+            renderPassKindName(pass.kind),
+            pass.name.c_str(),
+            pass.drawCount,
+            state
+        );
+    }
     ImGui::Separator();
     ImGui::Text(
         "Camera cm: %.1f, %.1f, %.1f",
