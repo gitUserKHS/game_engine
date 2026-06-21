@@ -1,5 +1,27 @@
 # 게임 루프와 입력
 
+## v0.8 입력 설정 파일
+
+기본 게임 입력은 `Content/Input/default.input.json`에서 읽는다. `axes`는
+`MoveForward`처럼 -1부터 1까지 변하는 값을 만들고, `actions`는 `Jump`처럼 눌림
+여부만 확인하는 버튼 입력이다.
+
+```json
+{
+  "axes": [
+    {"name": "MoveForward", "positive": "W", "negative": "S"},
+    {"name": "MoveRight", "positive": "D", "negative": "A"}
+  ],
+  "actions": [
+    {"name": "Jump", "key": "Space"}
+  ]
+}
+```
+
+`Application::processInput`은 GLFW 키 상태를 `InputSystem`에 넣고,
+`PlayerController::tick`은 `MoveForward`, `MoveRight` 축을 읽어 Pawn에 이동
+입력을 전달한다.
+
 ## 목표
 
 화면 프레임과 고정 업데이트의 차이, 이름 기반 입력 축이 Character 이동으로

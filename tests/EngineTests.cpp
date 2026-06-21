@@ -114,6 +114,40 @@ void testCollision() {
     require(sweep.has_value(), "Sweep missed known boxes.");
 }
 
+void testInputConfigLoadsAxisAndActions() {
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path() / "cocoa-engine-input-test";
+    std::filesystem::remove_all(root);
+    const std::filesystem::path config = root / "default.input.json";
+    writeTextFile(
+        config,
+        R"({
+  "axes": [
+    {"name": "MoveForward", "positive": "W", "negative": "S"},
+    {"name": "MoveRight", "positive": "D", "negative": "A"}
+  ],
+  "actions": [
+    {"name": "Jump", "key": "Space"}
+  ]
+})"
+    );
+
+    engine::OutputLog log;
+    engine::InputSystem input;
+    require(input.loadConfig(config, &log), "Input config did not load.");
+    input.setKeyDown(engine::Key::W, true);
+    input.setKeyDown(engine::Key::A, true);
+    input.setKeyDown(engine::Key::Space, true);
+    require(
+        near(input.axis("MoveForward"), 1.0F) &&
+            near(input.axis("MoveRight"), -1.0F) &&
+            input.action("Jump"),
+        "Input config bindings did not produce expected values."
+    );
+
+    std::filesystem::remove_all(root);
+}
+
 void testReflectionAndSerialization() {
     engine::registerEngineTypes();
     engine::World world("TestWorld");
@@ -636,6 +670,7 @@ int main() {
         testGuid();
         testAttachmentAndCycle();
         testCollision();
+        testInputConfigLoadsAxisAndActions();
         testReflectionAndSerialization();
         testPieIsolation();
         testRenderProxyDirtyUpdate();

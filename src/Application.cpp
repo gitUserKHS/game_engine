@@ -131,6 +131,11 @@ Application::Application(ApplicationOptions options)
     registerEngineTypes();
     createDemoWorld();
     runtime_.assets().scan(ENGINE_CONTENT_DIR, &runtime_.log());
+    runtime_.input().loadConfig(
+        std::filesystem::path{ENGINE_CONTENT_DIR} /
+            "Input" / "default.input.json",
+        &runtime_.log()
+    );
 }
 
 Application::~Application() {
@@ -267,6 +272,11 @@ void Application::processInput() {
     set(Key::A, GLFW_KEY_A);
     set(Key::S, GLFW_KEY_S);
     set(Key::D, GLFW_KEY_D);
+    set(Key::Q, GLFW_KEY_Q);
+    set(Key::E, GLFW_KEY_E);
+    set(Key::Space, GLFW_KEY_SPACE);
+    set(Key::Escape, GLFW_KEY_ESCAPE);
+    set(Key::F5, GLFW_KEY_F5);
 
     const bool f5Down = glfwGetKey(window_, GLFW_KEY_F5) == GLFW_PRESS;
     if (!capture && f5Down && !f5WasDown_) {

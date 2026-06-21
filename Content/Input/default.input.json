@@ -1,0 +1,20 @@
+{
+  "axes": [
+    {
+      "name": "MoveForward",
+      "positive": "W",
+      "negative": "S"
+    },
+    {
+      "name": "MoveRight",
+      "positive": "D",
+      "negative": "A"
+    }
+  ],
+  "actions": [
+    {
+      "name": "Jump",
+      "key": "Space"
+    }
+  ]
+}

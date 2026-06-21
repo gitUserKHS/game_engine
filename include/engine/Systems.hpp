@@ -121,17 +121,29 @@ enum class Key {
     A,
     S,
     D,
+    Q,
+    E,
+    Space,
     Escape,
     F5,
 };
 
+class OutputLog;
+
 class InputSystem {
 public:
     /// 플랫폼 키를 게임플레이 축 이름으로 변환한다. 키 자체의 수명은 Application에 있다.
+    void clearBindings();
     void bindAxis(std::string name, Key positive, Key negative);
+    void bindAction(std::string name, Key key);
+    [[nodiscard]] bool loadConfig(
+        const std::filesystem::path& path,
+        OutputLog* log = nullptr
+    );
     void setKeyDown(Key key, bool down);
     [[nodiscard]] bool keyDown(Key key) const;
     [[nodiscard]] float axis(std::string_view name) const;
+    [[nodiscard]] bool action(std::string_view name) const;
 
 private:
     struct AxisBinding {
@@ -140,6 +152,7 @@ private:
     };
 
     std::unordered_map<std::string, AxisBinding> axes_;
+    std::unordered_map<std::string, Key> actions_;
     std::unordered_map<Key, bool> keys_;
 };
 

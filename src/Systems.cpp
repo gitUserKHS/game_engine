@@ -142,6 +142,38 @@ std::string extensionLower(const std::filesystem::path& path) {
     return lowerAscii(path.extension().string());
 }
 
+std::optional<engine::Key> keyFromText(std::string text) {
+    text = lowerAscii(std::move(text));
+    if (text == "w") {
+        return engine::Key::W;
+    }
+    if (text == "a") {
+        return engine::Key::A;
+    }
+    if (text == "s") {
+        return engine::Key::S;
+    }
+    if (text == "d") {
+        return engine::Key::D;
+    }
+    if (text == "q") {
+        return engine::Key::Q;
+    }
+    if (text == "e") {
+        return engine::Key::E;
+    }
+    if (text == "space") {
+        return engine::Key::Space;
+    }
+    if (text == "escape") {
+        return engine::Key::Escape;
+    }
+    if (text == "f5") {
+        return engine::Key::F5;
+    }
+    return std::nullopt;
+}
+
 std::filesystem::path uniqueAssetPath(
     const std::filesystem::path& directory,
     const std::filesystem::path& preferredName
@@ -577,8 +609,60 @@ std::size_t RenderScene::updatesLastSync() const {
     return updatesLastSync_;
 }
 
+void InputSystem::clearBindings() {
+    axes_.clear();
+    actions_.clear();
+}
+
 void InputSystem::bindAxis(std::string name, Key positive, Key negative) {
     axes_.insert_or_assign(std::move(name), AxisBinding{positive, negative});
+}
+
+void InputSystem::bindAction(std::string name, Key key) {
+    actions_.insert_or_assign(std::move(name), key);
+}
+
+bool InputSystem::loadConfig(
+    const std::filesystem::path& path,
+    OutputLog* log
+) {
+    const std::optional<Json> json = readJsonFile(path, log);
+    if (!json.has_value()) {
+        return false;
+    }
+
+    std::unordered_map<std::string, AxisBinding> loadedAxes;
+    std::unordered_map<std::string, Key> loadedActions;
+    for (const Json& axis : json->value("axes", Json::array())) {
+        const std::string name = axis.value("name", std::string{});
+        const auto positive = keyFromText(axis.value("positive", std::string{}));
+        const auto negative = keyFromText(axis.value("negative", std::string{}));
+        if (name.empty() || !positive.has_value() || !negative.has_value()) {
+            if (log != nullptr) {
+                log->write("Skipped invalid input axis binding.");
+            }
+            continue;
+        }
+        loadedAxes.insert_or_assign(name, AxisBinding{*positive, *negative});
+    }
+    for (const Json& action : json->value("actions", Json::array())) {
+        const std::string name = action.value("name", std::string{});
+        const auto key = keyFromText(action.value("key", std::string{}));
+        if (name.empty() || !key.has_value()) {
+            if (log != nullptr) {
+                log->write("Skipped invalid input action binding.");
+            }
+            continue;
+        }
+        loadedActions.insert_or_assign(name, *key);
+    }
+
+    axes_ = std::move(loadedAxes);
+    actions_ = std::move(loadedActions);
+    if (log != nullptr) {
+        log->write("Input config loaded: " + pathToUtf8(path));
+    }
+    return true;
 }
 
 void InputSystem::setKeyDown(Key key, bool down) {
@@ -597,6 +681,11 @@ float InputSystem::axis(std::string_view name) const {
     }
     return (keyDown(found->second.positive) ? 1.0F : 0.0F) -
            (keyDown(found->second.negative) ? 1.0F : 0.0F);
+}
+
+bool InputSystem::action(std::string_view name) const {
+    const auto found = actions_.find(std::string{name});
+    return found != actions_.end() && keyDown(found->second);
 }
 
 void OutputLog::write(std::string message) {
