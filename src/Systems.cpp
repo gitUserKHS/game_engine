@@ -463,6 +463,53 @@ MovementResult CollisionWorld::moveComponent(
     return result;
 }
 
+MovementResult CollisionWorld::moveComponentStepped(
+    BoxComponent& moving,
+    const glm::vec3& delta,
+    float stepHeight,
+    const World& world
+) const {
+    const Transform original = moving.relativeTransform();
+    const MovementResult normal = moveComponent(moving, delta, world);
+    if ((!normal.blockedX && !normal.blockedY) || stepHeight <= 0.0F) {
+        return normal;
+    }
+
+    const glm::vec3 horizontal{delta.x, delta.y, 0.0F};
+    Transform stepped = original;
+    stepped.location.z += stepHeight;
+    if (blocksAt(moving, stepped.location, world)) {
+        moving.setRelativeTransform(original);
+        moving.setRelativeLocation(normal.location);
+        return normal;
+    }
+
+    moving.setRelativeTransform(stepped);
+    MovementResult horizontalResult = moveComponent(moving, horizontal, world);
+    if (horizontalResult.blockedX || horizontalResult.blockedY) {
+        moving.setRelativeTransform(original);
+        moving.setRelativeLocation(normal.location);
+        return normal;
+    }
+
+    glm::vec3 accepted = moving.relativeTransform().location;
+    constexpr int settleSteps = 8;
+    const float stepDown = stepHeight / static_cast<float>(settleSteps);
+    for (int step = 0; step < settleSteps; ++step) {
+        glm::vec3 candidate = accepted;
+        candidate.z -= stepDown;
+        if (blocksAt(moving, candidate, world)) {
+            break;
+        }
+        accepted = candidate;
+    }
+
+    moving.setRelativeLocation(accepted);
+    horizontalResult.location = accepted;
+    horizontalResult.blockedZ = false;
+    return horizontalResult;
+}
+
 void CollisionWorld::updateOverlaps(const World& world) {
     std::vector<Pair> current;
     const auto boxes = world.componentsOfType<BoxComponent>();

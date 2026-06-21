@@ -68,9 +68,10 @@ void Character::tick(float deltaTime) {
         pendingMovement_ = glm::normalize(pendingMovement_);
     }
     const glm::vec3 delta = pendingMovement_ * moveSpeed_ * deltaTime;
-    lastMovement_ = world()->collision().moveComponent(
+    lastMovement_ = world()->collision().moveComponentStepped(
         *collision_,
         delta,
+        stepHeight_,
         *world()
     );
     pendingMovement_ = {0.0F, 0.0F, 0.0F};

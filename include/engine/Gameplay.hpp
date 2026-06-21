@@ -34,6 +34,7 @@ private:
     glm::vec3 pendingMovement_{0.0F};
     MovementResult lastMovement_;
     float moveSpeed_{400.0F};
+    float stepHeight_{35.0F};
 };
 
 class Controller : public Actor {

@@ -114,6 +114,36 @@ void testCollision() {
     require(sweep.has_value(), "Sweep missed known boxes.");
 }
 
+void testSteppedMovementClimbsLowObstacle() {
+    engine::World world;
+    auto& mover = addBoxActor(
+        world,
+        "Mover",
+        {0.0F, 0.0F, 45.0F},
+        engine::CollisionChannel::Pawn
+    );
+    auto* moving = mover.findComponent<engine::BoxComponent>();
+    moving->setExtent({45.0F, 45.0F, 45.0F});
+    auto& step = addBoxActor(
+        world,
+        "Step",
+        {80.0F, 0.0F, 10.0F},
+        engine::CollisionChannel::WorldStatic
+    );
+    step.findComponent<engine::BoxComponent>()->setExtent({25.0F, 60.0F, 10.0F});
+
+    const engine::MovementResult result = world.collision().moveComponentStepped(
+        *moving,
+        {100.0F, 0.0F, 0.0F},
+        35.0F,
+        world
+    );
+    require(
+        result.location.x > 90.0F && result.location.z > 45.0F,
+        "Stepped movement did not climb a low obstacle."
+    );
+}
+
 void testInputConfigLoadsAxisAndActions() {
     const std::filesystem::path root =
         std::filesystem::temp_directory_path() / "cocoa-engine-input-test";
@@ -670,6 +700,7 @@ int main() {
         testGuid();
         testAttachmentAndCycle();
         testCollision();
+        testSteppedMovementClimbsLowObstacle();
         testInputConfigLoadsAxisAndActions();
         testReflectionAndSerialization();
         testPieIsolation();

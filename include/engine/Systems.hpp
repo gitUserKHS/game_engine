@@ -73,6 +73,12 @@ public:
         const glm::vec3& delta,
         const World& world
     ) const;
+    [[nodiscard]] MovementResult moveComponentStepped(
+        BoxComponent& moving,
+        const glm::vec3& delta,
+        float stepHeight,
+        const World& world
+    ) const;
     void updateOverlaps(const World& world);
     [[nodiscard]] const std::vector<OverlapEvent>& overlapEvents() const;
 

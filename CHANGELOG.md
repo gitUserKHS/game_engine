@@ -12,6 +12,7 @@
 - Content Browser의 외부 glTF/texture 경로 입력 import와 Content rescan 버튼
 - `Content/Input/default.input.json` 기반 InputAxis/InputAction 설정 로드
 - Details 패널의 `ObjectChannel`을 숫자 DragInt 대신 collision channel 콤보로 편집
+- `CollisionWorld::moveComponentStepped`와 Character step movement로 낮은 턱 이동 개선
 
 - 크기 조절 가능한 OpenGL framebuffer 기반 ImGui Viewport
 - Unreal 방식 에디터 카메라, visible proxy 클릭 선택, 선택 wireframe
