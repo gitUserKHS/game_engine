@@ -18,8 +18,12 @@ GPU 리소스를 만든다”는 책임 분리를 보여주는 첫 구현이다.
 `Renderer`는 매 Viewport 렌더 후 `RenderPassRecord` 목록을 남긴다. `Engine Debug`
 패널은 이 기록을 읽어 Shadow, Opaque, Debug, UI 패스 이름과 draw 수를 보여 준다.
 아직 정식 RenderGraph는 없지만, 현재 프레임이 어떤 제출 순서로 구성되는지 익히기
-위한 작은 관찰 창이다. Shadow 패스는 `planned`로 남겨 두어 다음 단계에서 무엇이
-비어 있는지 바로 볼 수 있게 했다.
+위한 작은 관찰 창이다.
+
+Shadow 패스는 DirectionalLight 방향에서 장면을 한 번 더 그려 1024px depth texture를
+만든다. 그 뒤 Opaque 패스의 fragment shader가 현재 픽셀의 light-space 깊이와 shadow
+map의 깊이를 비교해 간단한 그림자 계수를 곱한다. 지금은 교육용 고정 영역 shadow라
+카메라 밖 넓은 월드 전체를 완벽히 덮지는 않는다.
 
 ## 목표
 
@@ -49,7 +53,8 @@ flowchart LR
     Component["StaticMeshComponent"] -->|createRenderProxy| Proxy["RenderProxy"]
     Proxy --> Scene["RenderScene::sync"]
     Light["DirectionalLightComponent"] --> Scene
-    Scene --> Renderer["Renderer::renderToTarget"]
+    Scene --> Shadow["Shadow depth pass"]
+    Shadow --> Renderer["Renderer::renderToTarget"]
     Renderer --> Target["ViewportRenderTarget"]
     Target --> Texture["OpenGL color texture"]
     Texture --> ImGui["ImGui::Image"]
@@ -68,14 +73,16 @@ flowchart LR
    color texture와 depth renderbuffer가 Viewport 크기에 맞춰지는지 확인한다.
 6. `RenderScene::sync`에서 `DirectionalLightComponent`가 light proxy로 모이는지
    확인한다.
-7. `Renderer::renderToTarget`에서 장면과 선택 wireframe을 off-screen target에
+7. `Renderer::renderShadowMap`에서 opaque proxy가 depth texture에 먼저 그려지는지
+   확인한다.
+8. `Renderer::renderToTarget`에서 장면과 선택 wireframe을 off-screen target에
    그리는 순서를 읽는다.
-8. [`Application.cpp`](../../src/Application.cpp)의 `drawViewportPanel`에서
+9. [`Application.cpp`](../../src/Application.cpp)의 `drawViewportPanel`에서
    color texture가 `ImGui::Image`로 표시되는지 확인한다.
-9. `Renderer::lastPasses`와 `drawDebugPanel`에서 Shadow, Opaque, Debug, UI 패스 기록이
+10. `Renderer::lastPasses`와 `drawDebugPanel`에서 Shadow, Opaque, Debug, UI 패스 기록이
    어떻게 표시되는지 확인한다.
-10. [`basic.vert`](../../shaders/basic.vert)와
-   [`basic.frag`](../../shaders/basic.frag)에서 GPU 단계의 입력을 확인한다.
+11. [`basic.vert`](../../shaders/basic.vert), [`basic.frag`](../../shaders/basic.frag),
+   [`shadow_depth.vert`](../../shaders/shadow_depth.vert)를 이어서 읽는다.
 
 ## 실험 과제
 
@@ -91,6 +98,8 @@ Viewport 패널 너비를 드래그해 framebuffer 크기가 바뀌는지 확인
 - 선택 wireframe과 grid에도 조명을 적용해 디버그 색이 읽기 어려워진다.
 - framebuffer를 다시 화면 framebuffer로 unbind하지 않아 ImGui도 target에 그린다.
 - OpenGL 원점이 왼쪽 아래라는 점을 잊어 Viewport나 PNG가 상하로 뒤집힌다.
+- shadow map을 그린 뒤 Viewport framebuffer를 다시 bind하지 않아 메인 장면이
+  depth texture에 계속 그려진다.
 
 ## 관련 테스트
 

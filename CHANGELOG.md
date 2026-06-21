@@ -19,6 +19,7 @@
 - ImGuizmo Transform transaction이 Location, Rotation, Scale을 함께 Undo/Redo하는 테스트
 - Engine Debug 패널의 Opaque, Debug Wire, Selection Overlay 렌더 통계 보기
 - `RenderPassRecord` 기반 Shadow, Opaque, Debug, UI 패스 기록과 Debug 패널 표시
+- Directional light용 1024px shadow depth map과 기본 shadow factor 셰이더
 
 - 크기 조절 가능한 OpenGL framebuffer 기반 ImGui Viewport
 - Unreal 방식 에디터 카메라, visible proxy 클릭 선택, 선택 wireframe

@@ -26,6 +26,8 @@ namespace engine {
 
 namespace {
 
+constexpr int kShadowMapSize = 1024;
+
 std::string pathToUtf8(const std::filesystem::path& path) {
     const std::u8string utf8 = path.u8string();
     return {
@@ -144,7 +146,8 @@ std::vector<unsigned char> ViewportRenderTarget::readRgba() const {
 }
 
 Renderer::Renderer()
-    : program_(createProgram()) {
+    : program_(createProgram()),
+      depthProgram_(createDepthProgram()) {
     mvpLocation_ = glGetUniformLocation(program_, "uMVP");
     modelLocation_ = glGetUniformLocation(program_, "uModel");
     colorLocation_ = glGetUniformLocation(program_, "uColor");
@@ -153,8 +156,13 @@ Renderer::Renderer()
     lightIntensityLocation_ = glGetUniformLocation(program_, "uLightIntensity");
     ambientLocation_ = glGetUniformLocation(program_, "uAmbient");
     lightingEnabledLocation_ = glGetUniformLocation(program_, "uLightingEnabled");
+    lightMvpLocation_ = glGetUniformLocation(program_, "uLightMVP");
+    shadowEnabledLocation_ = glGetUniformLocation(program_, "uShadowEnabled");
+    shadowMapLocation_ = glGetUniformLocation(program_, "uShadowMap");
+    depthLightMvpLocation_ = glGetUniformLocation(depthProgram_, "uLightMVP");
     createCubeMesh();
     createGridMesh(1000.0F, 100.0F);
+    createShadowMap();
 }
 
 Renderer::~Renderer() {
@@ -167,6 +175,9 @@ Renderer::~Renderer() {
     glDeleteBuffers(1, &cubeEbo_);
     glDeleteBuffers(1, &cubeVbo_);
     glDeleteVertexArrays(1, &cubeVao_);
+    glDeleteTextures(1, &shadowDepthTexture_);
+    glDeleteFramebuffers(1, &shadowFramebuffer_);
+    glDeleteProgram(depthProgram_);
     glDeleteProgram(program_);
 }
 
@@ -197,6 +208,7 @@ void Renderer::render(const RenderScene& scene) const {
     } else {
         activeLight_ = DirectionalLightProxy{};
     }
+    lightViewProjection_ = lightViewProjection();
 
     drawGrid();
     std::size_t opaqueDraws = 1;
@@ -230,7 +242,9 @@ void Renderer::renderToTarget(
 ) {
     target.bind();
     beginPassRecording();
-    recordPass(RenderPassKind::Shadow, "Shadow", 0, false);
+    const std::size_t shadowDraws = renderShadowMap(scene);
+    recordPass(RenderPassKind::Shadow, "Shadow Map", shadowDraws);
+    target.bind();
     glViewport(0, 0, target.width(), target.height());
     glEnable(GL_DEPTH_TEST);
     glClearColor(0.08F, 0.10F, 0.14F, 1.0F);
@@ -303,6 +317,59 @@ void Renderer::recordPass(
         drawCount,
         implemented,
     });
+}
+
+glm::mat4 Renderer::lightViewProjection() const {
+    const glm::vec3 lightDirection = glm::normalize(activeLight_.direction);
+    const glm::vec3 center{0.0F, 0.0F, 120.0F};
+    const glm::vec3 eye = center - lightDirection * 1800.0F;
+    const glm::mat4 lightView = glm::lookAt(eye, center, {0.0F, 0.0F, 1.0F});
+    const glm::mat4 lightProjection =
+        glm::ortho(-1200.0F, 1200.0F, -1200.0F, 1200.0F, 1.0F, 3600.0F);
+    return lightProjection * lightView;
+}
+
+std::size_t Renderer::renderShadowMap(const RenderScene& scene) const {
+    if (shadowFramebuffer_ == 0 || shadowDepthTexture_ == 0) {
+        return 0;
+    }
+
+    if (!scene.lights().empty()) {
+        activeLight_ = scene.lights().front();
+    } else {
+        activeLight_ = DirectionalLightProxy{};
+    }
+    lightViewProjection_ = lightViewProjection();
+
+    glViewport(0, 0, kShadowMapSize, kShadowMapSize);
+    glBindFramebuffer(GL_FRAMEBUFFER, shadowFramebuffer_);
+    glClear(GL_DEPTH_BUFFER_BIT);
+    glEnable(GL_DEPTH_TEST);
+
+    std::size_t drawCount = 0;
+    for (const RenderProxy& proxy : scene.proxies()) {
+        if (proxy.wireframe) {
+            continue;
+        }
+        drawCubeDepth(proxy.worldMatrix);
+        ++drawCount;
+    }
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    return drawCount;
+}
+
+void Renderer::drawCubeDepth(const glm::mat4& model) const {
+    glUseProgram(depthProgram_);
+    const glm::mat4 lightMvp = lightViewProjection_ * model;
+    glUniformMatrix4fv(
+        depthLightMvpLocation_,
+        1,
+        GL_FALSE,
+        glm::value_ptr(lightMvp)
+    );
+    glBindVertexArray(cubeVao_);
+    glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, nullptr);
 }
 
 void Renderer::clearBackbuffer(int width, int height) const {
@@ -448,6 +515,15 @@ void Renderer::drawCubeModel(
     glUniform1f(lightIntensityLocation_, activeLight_.intensity);
     glUniform1f(ambientLocation_, 0.22F);
     glUniform1i(lightingEnabledLocation_, lit ? 1 : 0);
+    const glm::mat4 lightMvp = lightViewProjection_ * model;
+    glUniformMatrix4fv(lightMvpLocation_, 1, GL_FALSE, glm::value_ptr(lightMvp));
+    glUniform1i(
+        shadowEnabledLocation_,
+        lit && shadowDepthTexture_ != 0 ? 1 : 0
+    );
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, shadowDepthTexture_);
+    glUniform1i(shadowMapLocation_, 0);
     glBindVertexArray(cubeVao_);
     glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, nullptr);
 }
@@ -462,9 +538,16 @@ void Renderer::drawGrid() const {
         glm::value_ptr(viewProjection_)
     );
     glUniformMatrix4fv(modelLocation_, 1, GL_FALSE, glm::value_ptr(model));
+    glUniformMatrix4fv(
+        lightMvpLocation_,
+        1,
+        GL_FALSE,
+        glm::value_ptr(lightViewProjection_)
+    );
     const glm::vec3 color{0.38F, 0.44F, 0.48F};
     glUniform3fv(colorLocation_, 1, glm::value_ptr(color));
     glUniform1i(lightingEnabledLocation_, 0);
+    glUniform1i(shadowEnabledLocation_, 0);
     glBindVertexArray(gridVao_);
     glDrawArrays(GL_LINES, 0, gridVertexCount_);
 }
@@ -530,6 +613,81 @@ unsigned int Renderer::createProgram() {
     }
 
     return program;
+}
+
+unsigned int Renderer::createDepthProgram() {
+    const std::filesystem::path shaderDirectory{ENGINE_SHADER_DIR};
+    const unsigned int vertexShader = compileShader(
+        GL_VERTEX_SHADER,
+        readTextFile(shaderDirectory / "shadow_depth.vert")
+    );
+    const unsigned int fragmentShader = compileShader(
+        GL_FRAGMENT_SHADER,
+        readTextFile(shaderDirectory / "shadow_depth.frag")
+    );
+
+    const unsigned int program = glCreateProgram();
+    glAttachShader(program, vertexShader);
+    glAttachShader(program, fragmentShader);
+    glLinkProgram(program);
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
+
+    int success = 0;
+    glGetProgramiv(program, GL_LINK_STATUS, &success);
+    if (success == GL_FALSE) {
+        int logLength = 0;
+        glGetProgramiv(program, GL_INFO_LOG_LENGTH, &logLength);
+        std::string log(static_cast<std::size_t>(logLength), '\0');
+        glGetProgramInfoLog(program, logLength, nullptr, log.data());
+        glDeleteProgram(program);
+        throw std::runtime_error("Depth shader link failed:\n" + log);
+    }
+
+    return program;
+}
+
+void Renderer::createShadowMap() {
+    glGenFramebuffers(1, &shadowFramebuffer_);
+    glGenTextures(1, &shadowDepthTexture_);
+    glBindTexture(GL_TEXTURE_2D, shadowDepthTexture_);
+    glTexImage2D(
+        GL_TEXTURE_2D,
+        0,
+        GL_DEPTH_COMPONENT24,
+        kShadowMapSize,
+        kShadowMapSize,
+        0,
+        GL_DEPTH_COMPONENT,
+        GL_FLOAT,
+        nullptr
+    );
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    const float borderColor[]{1.0F, 1.0F, 1.0F, 1.0F};
+    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, shadowFramebuffer_);
+    glFramebufferTexture2D(
+        GL_FRAMEBUFFER,
+        GL_DEPTH_ATTACHMENT,
+        GL_TEXTURE_2D,
+        shadowDepthTexture_,
+        0
+    );
+    glDrawBuffer(GL_NONE);
+    glReadBuffer(GL_NONE);
+    const bool complete =
+        glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    if (!complete) {
+        glDeleteTextures(1, &shadowDepthTexture_);
+        glDeleteFramebuffers(1, &shadowFramebuffer_);
+        shadowDepthTexture_ = 0;
+        shadowFramebuffer_ = 0;
+    }
 }
 
 void Renderer::createCubeMesh() {

@@ -119,8 +119,13 @@ private:
     static unsigned int compileShader(unsigned int type, const std::string& source);
     static std::string readTextFile(const std::filesystem::path& path);
     static unsigned int createProgram();
+    static unsigned int createDepthProgram();
     void createCubeMesh();
     void createGridMesh(float halfExtent, float spacing);
+    void createShadowMap();
+    [[nodiscard]] glm::mat4 lightViewProjection() const;
+    [[nodiscard]] std::size_t renderShadowMap(const RenderScene& scene) const;
+    void drawCubeDepth(const glm::mat4& model) const;
     void drawCubeModel(
         const glm::mat4& model,
         const glm::vec3& color,
@@ -135,9 +140,12 @@ private:
     ) const;
 
     unsigned int program_{0};
+    unsigned int depthProgram_{0};
     unsigned int cubeVao_{0};
     unsigned int cubeVbo_{0};
     unsigned int cubeEbo_{0};
+    unsigned int shadowFramebuffer_{0};
+    unsigned int shadowDepthTexture_{0};
     unsigned int gridVao_{0};
     unsigned int gridVbo_{0};
     int gridVertexCount_{0};
@@ -149,7 +157,12 @@ private:
     int lightIntensityLocation_{-1};
     int ambientLocation_{-1};
     int lightingEnabledLocation_{-1};
+    int lightMvpLocation_{-1};
+    int shadowEnabledLocation_{-1};
+    int shadowMapLocation_{-1};
+    int depthLightMvpLocation_{-1};
     glm::mat4 viewProjection_{1.0F};
+    mutable glm::mat4 lightViewProjection_{1.0F};
     mutable DirectionalLightProxy activeLight_;
     mutable std::vector<RenderPassRecord> lastPasses_;
     std::size_t lastUiDrawCount_{0};
