@@ -75,6 +75,69 @@ public:
     [[nodiscard]] std::string_view typeName() const override;
 };
 
+/// Actor의 생명력을 저장하고 피해와 회복 규칙을 작게 캡슐화한다.
+class HealthComponent : public ActorComponent {
+public:
+    HealthComponent(std::string name, Actor* owner);
+
+    [[nodiscard]] std::string_view typeName() const override;
+    [[nodiscard]] float maxHealth() const;
+    void setMaxHealth(float value);
+    [[nodiscard]] float currentHealth() const;
+    void setCurrentHealth(float value);
+    [[nodiscard]] bool dead() const;
+    void applyDamage(float amount);
+    void heal(float amount);
+
+private:
+    float maxHealth_{100.0F};
+    float currentHealth_{100.0F};
+};
+
+/// 매 tick 이동 구간에 raycast를 쏘고, 맞은 Actor의 HealthComponent에 피해를 준다.
+class ProjectileComponent : public ActorComponent {
+public:
+    ProjectileComponent(std::string name, Actor* owner);
+
+    [[nodiscard]] std::string_view typeName() const override;
+    void tickComponent(float deltaTime) override;
+
+    [[nodiscard]] const glm::vec3& velocity() const;
+    void setVelocity(const glm::vec3& velocity);
+    [[nodiscard]] float damage() const;
+    void setDamage(float damage);
+    [[nodiscard]] float lifetime() const;
+    void setLifetime(float seconds);
+    void setInstigator(Actor* actor);
+
+private:
+    glm::vec3 velocity_{0.0F};
+    float damage_{20.0F};
+    float lifetime_{3.0F};
+    float age_{0.0F};
+    Guid instigator_;
+};
+
+/// 소유 Actor 기준으로 간단한 투사체 Actor를 생성하는 전투 시작점이다.
+class CombatComponent : public ActorComponent {
+public:
+    CombatComponent(std::string name, Actor* owner);
+
+    [[nodiscard]] std::string_view typeName() const override;
+    [[nodiscard]] float projectileSpeed() const;
+    void setProjectileSpeed(float speed);
+    [[nodiscard]] float projectileDamage() const;
+    void setProjectileDamage(float damage);
+    [[nodiscard]] float projectileLifetime() const;
+    void setProjectileLifetime(float seconds);
+    Actor* fireProjectile(const glm::vec3& direction);
+
+private:
+    float projectileSpeed_{1200.0F};
+    float projectileDamage_{20.0F};
+    float projectileLifetime_{3.0F};
+};
+
 class GameInstance : public Object {
 public:
     /// World가 바뀌어도 EngineRuntime과 함께 유지되는 게임 세션 객체다.

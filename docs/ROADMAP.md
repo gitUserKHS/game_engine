@@ -45,7 +45,7 @@
 - [ ] skeletal animation
 - [ ] ImGuizmo rotate/scale와 Undo/Redo 확장
 - [ ] Blueprint-lite event/property graph
-- [ ] 체력, 투사체, 전투 Component
+- [x] 체력, 투사체, 전투 Component
 
 ## v1.0 작은 3D RPG
 

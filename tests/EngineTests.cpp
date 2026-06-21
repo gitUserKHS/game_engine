@@ -344,6 +344,34 @@ void testSpringArmCameraCollisionPullsCameraIn() {
     );
 }
 
+void testCombatProjectileDamagesHealth() {
+    engine::World world;
+    auto& shooter = world.spawnActor<engine::Actor>("Shooter");
+    auto& shooterRoot = shooter.addComponent<engine::SceneComponent>("Root");
+    shooter.setRootComponent(&shooterRoot);
+    auto& combat = shooter.addComponent<engine::CombatComponent>("Combat");
+    combat.setProjectileDamage(35.0F);
+    combat.setProjectileSpeed(1000.0F);
+
+    auto& target = addBoxActor(
+        world,
+        "Target",
+        {200.0F, 0.0F, 45.0F},
+        engine::CollisionChannel::Pawn
+    );
+    auto& health = target.addComponent<engine::HealthComponent>("Health");
+    health.setMaxHealth(100.0F);
+    health.setCurrentHealth(100.0F);
+
+    engine::Actor* projectile = combat.fireProjectile({1.0F, 0.0F, 0.0F});
+    require(projectile != nullptr, "CombatComponent did not spawn a projectile.");
+    world.tick(0.2F);
+    require(
+        near(health.currentHealth(), 65.0F),
+        "Projectile did not damage the target HealthComponent."
+    );
+}
+
 void testEditorViewportMath() {
     engine::EditorViewportController camera;
     const glm::vec3 originalPosition = camera.position();
@@ -734,6 +762,7 @@ int main() {
         testDirectionalLightProxy();
         testCharacterCameraSeesPlayer();
         testSpringArmCameraCollisionPullsCameraIn();
+        testCombatProjectileDamagesHealth();
         testEditorViewportMath();
         testRenderProxyPicking();
         testWorldRestoreAndSnapshotTransactions();

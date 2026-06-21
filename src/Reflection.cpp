@@ -547,6 +547,91 @@ void registerEngineTypes() {
         {},
     });
     registry.registerType({
+        "HealthComponent",
+        &actorComponent,
+        [](Object* outer, std::string name) {
+            return std::make_unique<HealthComponent>(
+                std::move(name),
+                dynamic_cast<Actor*>(outer)
+            );
+        },
+        {
+            property<HealthComponent, float>(
+                "MaxHealth",
+                "Combat",
+                PropertyType::Float,
+                &HealthComponent::maxHealth,
+                &HealthComponent::setMaxHealth
+            ),
+            property<HealthComponent, float>(
+                "CurrentHealth",
+                "Combat",
+                PropertyType::Float,
+                &HealthComponent::currentHealth,
+                &HealthComponent::setCurrentHealth
+            ),
+        },
+    });
+    registry.registerType({
+        "ProjectileComponent",
+        &actorComponent,
+        [](Object* outer, std::string name) {
+            return std::make_unique<ProjectileComponent>(
+                std::move(name),
+                dynamic_cast<Actor*>(outer)
+            );
+        },
+        {
+            property<ProjectileComponent, float>(
+                "Damage",
+                "Combat",
+                PropertyType::Float,
+                &ProjectileComponent::damage,
+                &ProjectileComponent::setDamage
+            ),
+            property<ProjectileComponent, float>(
+                "Lifetime",
+                "Combat",
+                PropertyType::Float,
+                &ProjectileComponent::lifetime,
+                &ProjectileComponent::setLifetime
+            ),
+        },
+    });
+    registry.registerType({
+        "CombatComponent",
+        &actorComponent,
+        [](Object* outer, std::string name) {
+            return std::make_unique<CombatComponent>(
+                std::move(name),
+                dynamic_cast<Actor*>(outer)
+            );
+        },
+        {
+            property<CombatComponent, float>(
+                "ProjectileSpeed",
+                "Combat",
+                PropertyType::Float,
+                &CombatComponent::projectileSpeed,
+                &CombatComponent::setProjectileSpeed
+            ),
+            property<CombatComponent, float>(
+                "ProjectileDamage",
+                "Combat",
+                PropertyType::Float,
+                &CombatComponent::projectileDamage,
+                &CombatComponent::setProjectileDamage
+            ),
+            property<CombatComponent, float>(
+                "ProjectileLifetime",
+                "Combat",
+                PropertyType::Float,
+                &CombatComponent::projectileLifetime,
+                &CombatComponent::setProjectileLifetime
+            ),
+        },
+    });
+    registry.registerType({
         "GameInstance",
         &object,
         [](Object*, std::string) {

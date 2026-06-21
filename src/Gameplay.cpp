@@ -169,6 +169,196 @@ std::string_view GameMode::typeName() const {
     return "GameMode";
 }
 
+HealthComponent::HealthComponent(std::string name, Actor* owner)
+    : ActorComponent(std::move(name), owner) {}
+
+std::string_view HealthComponent::typeName() const {
+    return "HealthComponent";
+}
+
+float HealthComponent::maxHealth() const {
+    return maxHealth_;
+}
+
+void HealthComponent::setMaxHealth(float value) {
+    maxHealth_ = std::max(value, 1.0F);
+    currentHealth_ = std::clamp(currentHealth_, 0.0F, maxHealth_);
+}
+
+float HealthComponent::currentHealth() const {
+    return currentHealth_;
+}
+
+void HealthComponent::setCurrentHealth(float value) {
+    currentHealth_ = std::clamp(value, 0.0F, maxHealth_);
+}
+
+bool HealthComponent::dead() const {
+    return currentHealth_ <= 0.0F;
+}
+
+void HealthComponent::applyDamage(float amount) {
+    if (amount <= 0.0F) {
+        return;
+    }
+    setCurrentHealth(currentHealth_ - amount);
+}
+
+void HealthComponent::heal(float amount) {
+    if (amount <= 0.0F) {
+        return;
+    }
+    setCurrentHealth(currentHealth_ + amount);
+}
+
+ProjectileComponent::ProjectileComponent(std::string name, Actor* owner)
+    : ActorComponent(std::move(name), owner) {
+    tickSettings().enabled = true;
+    tickSettings().group = TickGroup::Physics;
+}
+
+std::string_view ProjectileComponent::typeName() const {
+    return "ProjectileComponent";
+}
+
+void ProjectileComponent::tickComponent(float deltaTime) {
+    Actor* projectile = owner();
+    if (projectile == nullptr || projectile->world() == nullptr ||
+        projectile->rootComponent() == nullptr) {
+        return;
+    }
+
+    age_ += deltaTime;
+    if (age_ >= lifetime_) {
+        projectile->world()->destroyActor(*projectile);
+        return;
+    }
+
+    const glm::vec3 delta = velocity_ * deltaTime;
+    const float distance = glm::length(delta);
+    if (distance <= 0.0001F) {
+        return;
+    }
+
+    const glm::vec3 origin = projectile->actorTransform().location;
+    const auto hit = projectile->world()->collision().raycast(
+        origin,
+        delta,
+        distance,
+        *projectile->world(),
+        CollisionChannel::Pawn,
+        projectile->findComponent<BoxComponent>()
+    );
+    if (hit.has_value()) {
+        Actor* target = hit->component->owner();
+        if (target != nullptr && target != projectile &&
+            target->guid() != instigator_) {
+            if (auto* health = target->findComponent<HealthComponent>()) {
+                health->applyDamage(damage_);
+            }
+        }
+        projectile->world()->destroyActor(*projectile);
+        return;
+    }
+
+    Transform transform = projectile->rootComponent()->relativeTransform();
+    transform.location += delta;
+    projectile->rootComponent()->setRelativeTransform(transform);
+}
+
+const glm::vec3& ProjectileComponent::velocity() const {
+    return velocity_;
+}
+
+void ProjectileComponent::setVelocity(const glm::vec3& velocity) {
+    velocity_ = velocity;
+}
+
+float ProjectileComponent::damage() const {
+    return damage_;
+}
+
+void ProjectileComponent::setDamage(float damage) {
+    damage_ = std::max(damage, 0.0F);
+}
+
+float ProjectileComponent::lifetime() const {
+    return lifetime_;
+}
+
+void ProjectileComponent::setLifetime(float seconds) {
+    lifetime_ = std::max(seconds, 0.01F);
+}
+
+void ProjectileComponent::setInstigator(Actor* actor) {
+    instigator_ = actor == nullptr ? Guid{} : actor->guid();
+}
+
+CombatComponent::CombatComponent(std::string name, Actor* owner)
+    : ActorComponent(std::move(name), owner) {}
+
+std::string_view CombatComponent::typeName() const {
+    return "CombatComponent";
+}
+
+float CombatComponent::projectileSpeed() const {
+    return projectileSpeed_;
+}
+
+void CombatComponent::setProjectileSpeed(float speed) {
+    projectileSpeed_ = std::max(speed, 0.0F);
+}
+
+float CombatComponent::projectileDamage() const {
+    return projectileDamage_;
+}
+
+void CombatComponent::setProjectileDamage(float damage) {
+    projectileDamage_ = std::max(damage, 0.0F);
+}
+
+float CombatComponent::projectileLifetime() const {
+    return projectileLifetime_;
+}
+
+void CombatComponent::setProjectileLifetime(float seconds) {
+    projectileLifetime_ = std::max(seconds, 0.01F);
+}
+
+Actor* CombatComponent::fireProjectile(const glm::vec3& direction) {
+    Actor* source = owner();
+    if (source == nullptr || source->world() == nullptr ||
+        glm::dot(direction, direction) <= 0.0001F) {
+        return nullptr;
+    }
+
+    const glm::vec3 forward = glm::normalize(direction);
+    Actor& projectile = source->world()->spawnActor<Actor>("Projectile");
+    auto& collision = projectile.addComponent<BoxComponent>("Collision");
+    collision.setExtent({8.0F, 8.0F, 8.0F});
+    collision.setObjectChannel(CollisionChannel::WorldDynamic);
+    collision.setDrawDebug(true);
+    collision.setRelativeLocation(source->actorTransform().location + forward * 70.0F);
+    projectile.setRootComponent(&collision);
+
+    auto& mesh = projectile.addComponent<StaticMeshComponent>("Mesh");
+    mesh.attachTo(&collision);
+    Transform meshTransform;
+    meshTransform.scale = {16.0F, 16.0F, 16.0F};
+    mesh.setRelativeTransform(meshTransform);
+    MaterialInstance material;
+    material.baseColor = {1.0F, 0.78F, 0.22F};
+    mesh.setMaterial(material);
+
+    auto& projectileComponent =
+        projectile.addComponent<ProjectileComponent>("Projectile");
+    projectileComponent.setVelocity(forward * projectileSpeed_);
+    projectileComponent.setDamage(projectileDamage_);
+    projectileComponent.setLifetime(projectileLifetime_);
+    projectileComponent.setInstigator(source);
+    return &projectile;
+}
+
 GameInstance::GameInstance()
     : Object("GameInstance", nullptr) {}
 

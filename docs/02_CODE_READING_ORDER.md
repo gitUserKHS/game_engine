@@ -15,10 +15,13 @@
 2. `EngineRuntime`
 3. `PlayerController`
 4. `Character`
-5. `src/Gameplay.cpp`
+5. `HealthComponent`, `ProjectileComponent`, `CombatComponent`
+6. `src/Gameplay.cpp`
 
 Edit World와 PIE World가 왜 따로 존재하는지, Controller가 Character를 어떻게
-possess하는지 살펴본다.
+possess하는지 살펴본다. 그다음 `CombatComponent::fireProjectile`에서 투사체
+Actor가 만들어지고, `ProjectileComponent::tickComponent`에서 raycast로 피해를
+적용하는 흐름을 이어서 읽는다.
 
 ## 3단계: 엔진의 중심
 
@@ -66,6 +69,7 @@ reflection 정보 하나가 Details 패널과 JSON 저장에 함께 쓰이는 �
 - `testPieIsolation`: PIE 복제본 격리
 - `testRenderProxyDirtyUpdate`: 변경된 proxy만 갱신
 - `testCharacterCameraSeesPlayer`: 카메라가 플레이어를 바라보는지 확인
+- `testCombatProjectileDamagesHealth`: 투사체가 HealthComponent에 피해를 주는지 확인
 - `testEditorViewportMath`: 에디터 카메라와 screen ray
 - `testRenderProxyPicking`: 가장 가까운 visible cube 선택
 - `testWorldRestoreAndSnapshotTransactions`: 구조 편집 Undo/Redo
