@@ -59,7 +59,8 @@ public:
         const glm::vec3& direction,
         float distance,
         const World& world,
-        CollisionChannel queryChannel = CollisionChannel::Visibility
+        CollisionChannel queryChannel = CollisionChannel::Visibility,
+        const BoxComponent* ignored = nullptr
     ) const;
     [[nodiscard]] std::optional<HitResult> sweep(
         const AABB& shape,

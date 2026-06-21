@@ -10,6 +10,10 @@ Content Browser의 `Source Path`에 외부 `.gltf`, `.glb`, `.png`, `.jpg`, `.bm
 `.meta`가 만들어진다. `Rescan Content`는 이미 있는 `.meta`를 다시 읽어 목록을
 갱신한다.
 
+PIE에서 `Character`의 카메라는 `SpringArmComponent` 부모를 기준으로 움직인다.
+카메라와 캐릭터 사이에 `Camera` 채널을 막는 `BoxComponent`가 있으면 카메라가
+벽 안으로 들어가지 않도록 앞으로 당겨진다.
+
 Visual Studio의 **Developer PowerShell for VS**에서 저장소 루트로 이동한 뒤:
 
 ```powershell

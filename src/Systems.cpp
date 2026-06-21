@@ -324,7 +324,8 @@ std::optional<HitResult> CollisionWorld::raycast(
     const glm::vec3& direction,
     float distance,
     const World& world,
-    CollisionChannel queryChannel
+    CollisionChannel queryChannel,
+    const BoxComponent* ignored
 ) const {
     if (distance <= 0.0F || glm::dot(direction, direction) <= 0.000001F) {
         return std::nullopt;
@@ -335,7 +336,8 @@ std::optional<HitResult> CollisionWorld::raycast(
     float closestDistance = distance;
 
     for (BoxComponent* box : world.componentsOfType<BoxComponent>()) {
-        if (!box->collisionEnabled() ||
+        if (box == ignored ||
+            !box->collisionEnabled() ||
             box->responseTo(queryChannel) == CollisionResponse::Ignore) {
             continue;
         }

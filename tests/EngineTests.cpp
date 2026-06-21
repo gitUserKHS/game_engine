@@ -8,6 +8,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <glm/matrix.hpp>
 #include <iostream>
 #include <stdexcept>
 #include <string_view>
@@ -315,6 +316,31 @@ void testCharacterCameraSeesPlayer() {
     require(
         std::abs(ndc.x) < 1.0F && std::abs(ndc.y) < 1.0F,
         "Player is outside the Character camera viewport."
+    );
+}
+
+void testSpringArmCameraCollisionPullsCameraIn() {
+    engine::World world;
+    auto& character = world.spawnActor<engine::Character>("Player");
+    auto* camera = character.findComponent<engine::CameraComponent>();
+    require(camera != nullptr, "Character camera was not constructed.");
+
+    const glm::vec3 target = character.rootComponent()->worldTransform().location;
+    const glm::vec3 desired = camera->worldTransform().location - target;
+    const float originalDistance = glm::length(desired);
+    auto& wall = addBoxActor(
+        world,
+        "CameraBlocker",
+        target + glm::normalize(desired) * 300.0F,
+        engine::CollisionChannel::WorldStatic
+    );
+    wall.findComponent<engine::BoxComponent>()->setExtent({120.0F, 120.0F, 120.0F});
+
+    const engine::CameraView view = camera->cameraView(16.0F / 9.0F);
+    const glm::vec3 resolvedLocation = glm::vec3{glm::inverse(view.view)[3]};
+    require(
+        glm::distance(target, resolvedLocation) < originalDistance,
+        "SpringArm camera collision did not pull the camera closer."
     );
 }
 
@@ -707,6 +733,7 @@ int main() {
         testRenderProxyDirtyUpdate();
         testDirectionalLightProxy();
         testCharacterCameraSeesPlayer();
+        testSpringArmCameraCollisionPullsCameraIn();
         testEditorViewportMath();
         testRenderProxyPicking();
         testWorldRestoreAndSnapshotTransactions();

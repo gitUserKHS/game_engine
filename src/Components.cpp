@@ -1,5 +1,7 @@
 #include "engine/Components.hpp"
 
+#include "engine/Systems.hpp"
+
 #include <glm/common.hpp>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
@@ -180,13 +182,35 @@ void CameraComponent::setActive(bool active) {
 
 CameraView CameraComponent::cameraView(float aspectRatio) const {
     const glm::mat4 matrix = worldMatrix();
-    const glm::vec3 location = glm::vec3{matrix[3]};
+    glm::vec3 location = glm::vec3{matrix[3]};
     const glm::vec3 forward = glm::normalize(
         glm::vec3{matrix * glm::vec4{1.0F, 0.0F, 0.0F, 0.0F}}
     );
     const glm::vec3 up = glm::normalize(
         glm::vec3{matrix * glm::vec4{0.0F, 0.0F, 1.0F, 0.0F}}
     );
+    if (auto* springArm = dynamic_cast<SpringArmComponent*>(parent());
+        springArm != nullptr && owner() != nullptr && owner()->world() != nullptr) {
+        const glm::vec3 target = springArm->worldTransform().location;
+        const glm::vec3 desired = location - target;
+        const float distance = glm::length(desired);
+        if (distance > 0.001F) {
+            const BoxComponent* ignored = owner()->findComponent<BoxComponent>();
+            const auto hit = owner()->world()->collision().raycast(
+                target,
+                desired,
+                distance,
+                *owner()->world(),
+                CollisionChannel::Camera,
+                ignored
+            );
+            if (hit.has_value()) {
+                const glm::vec3 direction = glm::normalize(desired);
+                location = target +
+                           direction * std::max(hit->distance - 10.0F, 10.0F);
+            }
+        }
+    }
     CameraView view;
     view.view = glm::lookAt(
         location,
