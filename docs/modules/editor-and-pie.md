@@ -48,8 +48,9 @@ flowchart LR
 
 ## 실험 과제
 
-Edit에서 큐브를 만들고 이동한 뒤 Undo/Redo한다. 이어서 PIE에서 플레이어를
-이동하고 종료한다. 생성·변형은 되돌릴 수 있고 PIE 이동은 Edit에 남지 않아야 한다.
+Edit에서 큐브를 만들고 이동·회전·크기 변경을 한 뒤 Undo/Redo한다. 이어서 PIE에서
+플레이어를 이동하고 종료한다. 생성·변형은 되돌릴 수 있고 PIE 이동은 Edit에 남지
+않아야 한다.
 
 ## 흔한 실수
 
@@ -64,4 +65,5 @@ Edit에서 큐브를 만들고 이동한 뒤 Undo/Redo한다. 이어서 PIE에�
 
 [`EngineTests.cpp`](../../tests/EngineTests.cpp)의 `testPieIsolation`,
 `testEditorViewportMath`, `testRenderProxyPicking`,
-`testWorldRestoreAndSnapshotTransactions`를 함께 읽는다.
+`testWorldRestoreAndSnapshotTransactions`,
+`testTransformTransactionRestoresRotationAndScale`를 함께 읽는다.

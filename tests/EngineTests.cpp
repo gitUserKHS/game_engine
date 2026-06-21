@@ -529,6 +529,46 @@ void testWorldRestoreAndSnapshotTransactions() {
     );
 }
 
+void testTransformTransactionRestoresRotationAndScale() {
+    engine::registerEngineTypes();
+
+    engine::World world("TransformTransactionWorld");
+    auto& actor = world.spawnActor<engine::Actor>("Editable");
+    auto& root = actor.addComponent<engine::SceneComponent>("Root");
+    actor.setRootComponent(&root);
+
+    engine::Transform before;
+    before.location = {10.0F, 20.0F, 30.0F};
+    before.rotationDegrees = {0.0F, 15.0F, 30.0F};
+    before.scale = {1.0F, 1.5F, 2.0F};
+    root.setRelativeTransform(before);
+
+    engine::Transform after = before;
+    after.location = {100.0F, -50.0F, 75.0F};
+    after.rotationDegrees = {45.0F, 90.0F, 135.0F};
+    after.scale = {2.0F, 0.5F, 3.0F};
+    root.setRelativeTransform(after);
+
+    engine::TransactionStack transactions;
+    transactions.recordTransform(root.guid(), before, after);
+
+    require(transactions.undo(world), "Transform transaction undo failed.");
+    require(
+        near(root.relativeTransform().location, before.location) &&
+            near(root.relativeTransform().rotationDegrees, before.rotationDegrees) &&
+            near(root.relativeTransform().scale, before.scale),
+        "Transform undo did not restore location, rotation, and scale."
+    );
+
+    require(transactions.redo(world), "Transform transaction redo failed.");
+    require(
+        near(root.relativeTransform().location, after.location) &&
+            near(root.relativeTransform().rotationDegrees, after.rotationDegrees) &&
+            near(root.relativeTransform().scale, after.scale),
+        "Transform redo did not reapply location, rotation, and scale."
+    );
+}
+
 void testApplicationOptions() {
     const std::array<std::string_view, 9> arguments{
         "--capture",
@@ -766,6 +806,7 @@ int main() {
         testEditorViewportMath();
         testRenderProxyPicking();
         testWorldRestoreAndSnapshotTransactions();
+        testTransformTransactionRestoresRotationAndScale();
         testApplicationOptions();
         testPngWriter();
         testAssetRegistryLoadsGuidAssets();

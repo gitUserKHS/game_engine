@@ -110,5 +110,6 @@ flowchart LR
 ## 관련 테스트
 
 `tests/EngineTests.cpp`의 `testEditorViewportMath`,
-`testRenderProxyPicking`, `testWorldRestoreAndSnapshotTransactions`가 카메라,
-선택, 구조 편집 Undo/Redo의 핵심 규칙을 확인한다.
+`testRenderProxyPicking`, `testWorldRestoreAndSnapshotTransactions`,
+`testTransformTransactionRestoresRotationAndScale`가 카메라, 선택, 구조 편집,
+Transform Undo/Redo의 핵심 규칙을 확인한다.
