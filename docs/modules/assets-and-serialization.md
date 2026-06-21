@@ -11,6 +11,11 @@ texture는 렌더러가 필요할 때 `Renderer::textureFor`에서 한 번 생�
 보관한다. 이렇게 나누면 Content 스캔은 빠르게 끝나고, GPU 리소스는 화면에
 필요해지는 순간에만 만들어진다.
 
+StaticMesh도 같은 규칙을 따른다. `AssetRegistry::loadStaticMesh`가
+`StaticMeshAsset`을 만들고, `Renderer::meshFor`가 GUID 기준 `MeshGpuResource`를
+캐시한다. 현재 v0.7에서는 모든 mesh가 Cube primitive를 가리키지만, 이 API가
+나중에 실제 glTF vertex/index buffer 로딩으로 확장될 자리다.
+
 ## 목표
 
 Content 폴더의 파일을 GUID로 식별하고, World 객체와 프로퍼티를 JSON으로

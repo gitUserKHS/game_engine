@@ -8,6 +8,11 @@ OpenGL 2D texture와 mipmap을 만든 뒤 GUID 기준 캐시에 보관한다. �
 이 단계는 “Asset Registry는 메타데이터와 CPU 설명을 읽고, Renderer는 필요할 때
 GPU 리소스를 만든다”는 책임 분리를 보여주는 첫 구현이다.
 
+`Renderer::meshFor`는 `StaticMeshAsset`을 `MeshGpuResource`로 바꾼다. 지금은
+교육용 단계라 glTF도 Cube primitive로 등록되며 기존 cube VAO를 GUID 캐시에
+연결한다. 다음 단계에서 실제 glTF vertex/index buffer를 만들 때도 같은 API를
+유지하면 Component 쪽 코드는 크게 바뀌지 않는다.
+
 ## 목표
 
 게임 객체가 OpenGL을 직접 호출하지 않고 화면에 그려지는 데이터 흐름을 이해한다.

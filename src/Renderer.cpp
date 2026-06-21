@@ -281,6 +281,35 @@ std::vector<unsigned char> Renderer::readBackbufferRgba(
     return pixels;
 }
 
+const MeshGpuResource* Renderer::meshFor(
+    const StaticMeshAsset& asset,
+    std::string* error
+) {
+    const auto cached = meshCache_.find(asset.guid);
+    if (cached != meshCache_.end()) {
+        return &cached->second;
+    }
+
+    if (asset.primitive != MeshPrimitive::Cube) {
+        if (error != nullptr) {
+            *error = "Unsupported StaticMesh primitive.";
+        }
+        return nullptr;
+    }
+
+    auto [iterator, inserted] = meshCache_.emplace(
+        asset.guid,
+        MeshGpuResource{
+            asset.guid,
+            asset.primitive,
+            cubeVao_,
+            36,
+        }
+    );
+    (void)inserted;
+    return &iterator->second;
+}
+
 const TextureGpuResource* Renderer::textureFor(
     const TextureAsset& asset,
     std::string* error

@@ -15,7 +15,15 @@
 namespace engine {
 
 class RenderScene;
+struct StaticMeshAsset;
 struct TextureAsset;
+
+struct MeshGpuResource {
+    Guid guid;
+    MeshPrimitive primitive{MeshPrimitive::Cube};
+    unsigned int vertexArray{0};
+    int indexCount{0};
+};
 
 struct TextureGpuResource {
     Guid guid;
@@ -86,6 +94,10 @@ public:
         const TextureAsset& asset,
         std::string* error = nullptr
     );
+    [[nodiscard]] const MeshGpuResource* meshFor(
+        const StaticMeshAsset& asset,
+        std::string* error = nullptr
+    );
 
 private:
     static unsigned int compileShader(unsigned int type, const std::string& source);
@@ -116,6 +128,7 @@ private:
     int lightingEnabledLocation_{-1};
     glm::mat4 viewProjection_{1.0F};
     mutable DirectionalLightProxy activeLight_;
+    std::unordered_map<Guid, MeshGpuResource> meshCache_;
     std::unordered_map<Guid, TextureGpuResource> textureCache_;
 };
 
