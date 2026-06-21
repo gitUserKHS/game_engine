@@ -145,6 +145,78 @@ void testSteppedMovementClimbsLowObstacle() {
     );
 }
 
+void testRigidBodyAdapterFallsAndBlocks() {
+    engine::World world;
+    auto& floor = addBoxActor(
+        world,
+        "Floor",
+        {0.0F, 0.0F, -10.0F},
+        engine::CollisionChannel::WorldStatic
+    );
+    floor.findComponent<engine::BoxComponent>()->setExtent({200.0F, 200.0F, 10.0F});
+
+    auto& crate = addBoxActor(
+        world,
+        "Crate",
+        {0.0F, 0.0F, 120.0F},
+        engine::CollisionChannel::WorldDynamic
+    );
+    auto* body = crate.findComponent<engine::BoxComponent>();
+    body->setExtent({20.0F, 20.0F, 20.0F});
+    auto& rigidBody = crate.addComponent<engine::RigidBodyComponent>("RigidBody");
+
+    for (int step = 0; step < 120; ++step) {
+        world.tick(1.0F / 60.0F);
+    }
+
+    require(
+        rigidBody.grounded(),
+        "RigidBody did not report grounded after falling onto the floor."
+    );
+    require(
+        crate.actorTransform().location.z >= 20.0F &&
+            crate.actorTransform().location.z < 45.0F,
+        "RigidBody did not stop near the blocking floor."
+    );
+    require(
+        near(rigidBody.velocity().z, 0.0F),
+        "RigidBody vertical velocity was not cleared by blocking collision."
+    );
+}
+
+void testRigidBodyReflectionSerialization() {
+    engine::registerEngineTypes();
+    engine::World world;
+    auto& actor = addBoxActor(
+        world,
+        "Body",
+        {0.0F, 0.0F, 80.0F},
+        engine::CollisionChannel::WorldDynamic
+    );
+    auto& rigidBody = actor.addComponent<engine::RigidBodyComponent>("RigidBody");
+    rigidBody.setVelocity({100.0F, 0.0F, 25.0F});
+    rigidBody.setMass(3.5F);
+    rigidBody.setGravityEnabled(false);
+
+    const std::string text = engine::WorldSerializer::toJson(world);
+    auto loaded = engine::WorldSerializer::fromJson(text);
+    require(loaded != nullptr, "RigidBody World JSON did not reload.");
+    auto* loadedActor = loaded->findActor(actor.guid());
+    require(loadedActor != nullptr, "RigidBody Actor was not restored.");
+    auto* loadedRigidBody =
+        loadedActor->findComponent<engine::RigidBodyComponent>();
+    require(
+        loadedRigidBody != nullptr,
+        "RigidBody component was not restored."
+    );
+    require(
+        near(loadedRigidBody->velocity(), glm::vec3{100.0F, 0.0F, 25.0F}) &&
+            near(loadedRigidBody->mass(), 3.5F) &&
+            !loadedRigidBody->gravityEnabled(),
+        "RigidBody reflected properties were not preserved."
+    );
+}
+
 void testInputConfigLoadsAxisAndActions() {
     const std::filesystem::path root =
         std::filesystem::temp_directory_path() / "cocoa-engine-input-test";
@@ -941,6 +1013,8 @@ int main() {
         testAttachmentAndCycle();
         testCollision();
         testSteppedMovementClimbsLowObstacle();
+        testRigidBodyAdapterFallsAndBlocks();
+        testRigidBodyReflectionSerialization();
         testInputConfigLoadsAxisAndActions();
         testReflectionAndSerialization();
         testPieIsolation();

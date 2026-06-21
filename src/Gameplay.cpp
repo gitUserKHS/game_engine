@@ -456,6 +456,70 @@ Actor* CombatComponent::fireProjectile(const glm::vec3& direction) {
     return &projectile;
 }
 
+RigidBodyComponent::RigidBodyComponent(std::string name, Actor* owner)
+    : ActorComponent(std::move(name), owner) {
+    tickSettings().enabled = true;
+    tickSettings().group = TickGroup::Physics;
+    state_.body = guid();
+}
+
+std::string_view RigidBodyComponent::typeName() const {
+    return "RigidBodyComponent";
+}
+
+void RigidBodyComponent::tickComponent(float deltaTime) {
+    Actor* actor = owner();
+    if (actor == nullptr || actor->world() == nullptr) {
+        return;
+    }
+    BoxComponent* body = actor->findComponent<BoxComponent>();
+    if (body == nullptr || !body->collisionEnabled()) {
+        return;
+    }
+    state_.body = guid();
+    lastMovement_ = adapter_.integrate(*body, state_, deltaTime, *actor->world());
+}
+
+const glm::vec3& RigidBodyComponent::velocity() const {
+    return state_.velocity;
+}
+
+void RigidBodyComponent::setVelocity(const glm::vec3& velocity) {
+    state_.velocity = velocity;
+}
+
+float RigidBodyComponent::mass() const {
+    return state_.mass;
+}
+
+void RigidBodyComponent::setMass(float mass) {
+    state_.mass = std::max(mass, 0.001F);
+}
+
+bool RigidBodyComponent::dynamic() const {
+    return state_.dynamic;
+}
+
+void RigidBodyComponent::setDynamic(bool dynamic) {
+    state_.dynamic = dynamic;
+}
+
+bool RigidBodyComponent::gravityEnabled() const {
+    return state_.gravityEnabled;
+}
+
+void RigidBodyComponent::setGravityEnabled(bool enabled) {
+    state_.gravityEnabled = enabled;
+}
+
+bool RigidBodyComponent::grounded() const {
+    return state_.grounded;
+}
+
+const MovementResult& RigidBodyComponent::lastMovement() const {
+    return lastMovement_;
+}
+
 SkeletalAnimationComponent::SkeletalAnimationComponent(
     std::string name,
     Actor* owner

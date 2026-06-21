@@ -35,6 +35,7 @@
 | 생명주기/Tick | 호출 순서, 그룹, Tick 중 spawn/destroy |
 | Reflection | 타입 팩토리, getter/setter, 저장 플래그 |
 | 충돌 | Block/Overlap/Ignore, raycast, sweep |
+| 물리 | gravity integration, blocked axis velocity, grounded, property 저장 |
 | 애니메이션 | keyframe 보간, bone 이름 매칭, Character 기본 pose 적용 |
 | 렌더 Component | proxy 값과 revision 갱신 횟수 |
 | Editor Viewport | 카메라 수학, screen ray, 가장 가까운 proxy 선택 |

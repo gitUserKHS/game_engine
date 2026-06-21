@@ -33,6 +33,15 @@ struct MovementResult {
     bool blockedZ{false};
 };
 
+struct RigidBodyState {
+    Guid body;
+    glm::vec3 velocity{0.0F};
+    float mass{1.0F};
+    bool dynamic{true};
+    bool gravityEnabled{true};
+    bool grounded{false};
+};
+
 enum class OverlapEventType {
     Begin,
     Stay,
@@ -106,6 +115,22 @@ private:
 
     std::vector<Pair> previousOverlaps_;
     std::vector<OverlapEvent> overlapEvents_;
+};
+
+class JoltRigidBodyAdapter {
+public:
+    /// Jolt 교체 지점을 작게 흉내 낸다. 현재는 AABB 이동과 중력만 자체 구현한다.
+    [[nodiscard]] MovementResult integrate(
+        BoxComponent& body,
+        RigidBodyState& state,
+        float deltaTime,
+        const World& world
+    ) const;
+    [[nodiscard]] const glm::vec3& gravity() const;
+    void setGravity(const glm::vec3& gravity);
+
+private:
+    glm::vec3 gravity_{0.0F, 0.0F, -980.0F};
 };
 
 class RenderScene {

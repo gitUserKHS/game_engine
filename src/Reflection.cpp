@@ -632,6 +632,58 @@ void registerEngineTypes() {
         },
     });
     registry.registerType({
+        "RigidBodyComponent",
+        &actorComponent,
+        [](Object* outer, std::string name) {
+            return std::make_unique<RigidBodyComponent>(
+                std::move(name),
+                dynamic_cast<Actor*>(outer)
+            );
+        },
+        {
+            {
+                "Velocity",
+                "Physics",
+                PropertyType::Vector3,
+                kEditSave,
+                [](const Object& object) -> PropertyValue {
+                    return dynamic_cast<const RigidBodyComponent&>(object)
+                        .velocity();
+                },
+                [](Object& object, const PropertyValue& value) {
+                    auto* rigidBody = dynamic_cast<RigidBodyComponent*>(&object);
+                    const auto* velocity = std::get_if<glm::vec3>(&value);
+                    if (rigidBody == nullptr || velocity == nullptr) {
+                        return false;
+                    }
+                    rigidBody->setVelocity(*velocity);
+                    return true;
+                },
+            },
+            property<RigidBodyComponent, float>(
+                "Mass",
+                "Physics",
+                PropertyType::Float,
+                &RigidBodyComponent::mass,
+                &RigidBodyComponent::setMass
+            ),
+            property<RigidBodyComponent, bool>(
+                "Dynamic",
+                "Physics",
+                PropertyType::Boolean,
+                &RigidBodyComponent::dynamic,
+                &RigidBodyComponent::setDynamic
+            ),
+            property<RigidBodyComponent, bool>(
+                "GravityEnabled",
+                "Physics",
+                PropertyType::Boolean,
+                &RigidBodyComponent::gravityEnabled,
+                &RigidBodyComponent::setGravityEnabled
+            ),
+        },
+    });
+    registry.registerType({
         "SkeletalAnimationComponent",
         &actorComponent,
         [](Object* outer, std::string name) {

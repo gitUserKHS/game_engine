@@ -512,6 +512,48 @@ MovementResult CollisionWorld::moveComponentStepped(
     return horizontalResult;
 }
 
+MovementResult JoltRigidBodyAdapter::integrate(
+    BoxComponent& body,
+    RigidBodyState& state,
+    float deltaTime,
+    const World& world
+) const {
+    if (!state.dynamic || deltaTime <= 0.0F) {
+        state.grounded = false;
+        return MovementResult{body.relativeTransform().location};
+    }
+
+    if (state.gravityEnabled) {
+        state.velocity += gravity_ * deltaTime;
+    }
+
+    const glm::vec3 delta = state.velocity * deltaTime;
+    MovementResult result = world.collision().moveComponent(body, delta, world);
+    if (result.blockedX) {
+        state.velocity.x = 0.0F;
+    }
+    if (result.blockedY) {
+        state.velocity.y = 0.0F;
+    }
+    if (result.blockedZ) {
+        if (state.velocity.z < 0.0F) {
+            state.grounded = true;
+        }
+        state.velocity.z = 0.0F;
+    } else {
+        state.grounded = false;
+    }
+    return result;
+}
+
+const glm::vec3& JoltRigidBodyAdapter::gravity() const {
+    return gravity_;
+}
+
+void JoltRigidBodyAdapter::setGravity(const glm::vec3& gravity) {
+    gravity_ = gravity;
+}
+
 void CollisionWorld::updateOverlaps(const World& world) {
     std::vector<Pair> current;
     const auto boxes = world.componentsOfType<BoxComponent>();

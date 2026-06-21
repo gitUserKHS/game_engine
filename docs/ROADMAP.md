@@ -41,7 +41,7 @@
 
 ## v0.9 Gameplay Tools
 
-- [ ] Jolt rigid body adapter
+- [x] Jolt-ready rigid body adapter
 - [x] skeletal animation
 - [x] ImGuizmo rotate/scale와 Undo/Redo 확장
 - [x] Blueprint-lite event/property graph

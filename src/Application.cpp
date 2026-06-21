@@ -361,7 +361,7 @@ void Application::createDemoWorld() {
                           glm::vec3 size,
                           glm::vec3 color,
                           CollisionChannel channel
-                      ) {
+                      ) -> Actor& {
         Actor& actor = world->spawnActor<Actor>(std::move(name));
         auto& collision = actor.addComponent<BoxComponent>("Collision");
         collision.setRelativeLocation(location);
@@ -378,6 +378,7 @@ void Application::createDemoWorld() {
         MaterialInstance material;
         material.baseColor = color;
         mesh.setMaterial(material);
+        return actor;
     };
 
     createCube(
@@ -408,6 +409,14 @@ void Application::createDemoWorld() {
         {0.85F, 0.38F, 0.20F},
         CollisionChannel::WorldStatic
     );
+    Actor& physicsCrate = createCube(
+        "Physics Crate",
+        {-180.0F, 260.0F, 260.0F},
+        {80.0F, 80.0F, 80.0F},
+        {0.92F, 0.72F, 0.24F},
+        CollisionChannel::WorldDynamic
+    );
+    physicsCrate.addComponent<RigidBodyComponent>("RigidBody");
 
     Actor& lightActor = world->spawnActor<Actor>("Sun");
     auto& light = lightActor.addComponent<DirectionalLightComponent>("Light");

@@ -66,6 +66,8 @@ reflection 정보 하나가 Details 패널과 JSON 저장에 함께 쓰이는 �
 
 - `testAttachmentAndCycle`: Transform 계층과 순환 방지
 - `testCollision`: overlap, raycast, sweep
+- `testRigidBodyAdapterFallsAndBlocks`: rigid body adapter가 중력과 차단을 적용하는지 확인
+- `testRigidBodyReflectionSerialization`: rigid body property가 저장/로드되는지 확인
 - `testReflectionAndSerialization`: 프로퍼티와 World 저장/로드
 - `testPieIsolation`: PIE 복제본 격리
 - `testRenderProxyDirtyUpdate`: 변경된 proxy만 갱신

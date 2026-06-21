@@ -141,6 +141,31 @@ private:
     float projectileLifetime_{3.0F};
 };
 
+/// BoxComponent를 간단한 dynamic rigid body처럼 움직인다. 내부 adapter는 나중에 Jolt로 교체한다.
+class RigidBodyComponent : public ActorComponent {
+public:
+    RigidBodyComponent(std::string name, Actor* owner);
+
+    [[nodiscard]] std::string_view typeName() const override;
+    void tickComponent(float deltaTime) override;
+
+    [[nodiscard]] const glm::vec3& velocity() const;
+    void setVelocity(const glm::vec3& velocity);
+    [[nodiscard]] float mass() const;
+    void setMass(float mass);
+    [[nodiscard]] bool dynamic() const;
+    void setDynamic(bool dynamic);
+    [[nodiscard]] bool gravityEnabled() const;
+    void setGravityEnabled(bool enabled);
+    [[nodiscard]] bool grounded() const;
+    [[nodiscard]] const MovementResult& lastMovement() const;
+
+private:
+    RigidBodyState state_;
+    MovementResult lastMovement_;
+    JoltRigidBodyAdapter adapter_;
+};
+
 /// SceneComponent를 bone처럼 보고 JSON keyframe clip으로 움직이는 교육용 skeletal animation이다.
 class SkeletalAnimationComponent : public ActorComponent {
 public:
