@@ -170,5 +170,6 @@ PIE를 시작하면 Edit World를 JSON으로 직렬화한 뒤 새 World로 역�
 - [게임 루프와 입력](modules/game-loop-and-input.md)
 - [렌더링](modules/rendering.md)
 - [충돌](modules/collision.md)
+- [게임플레이 도구](modules/gameplay-tools.md)
 - [에디터와 PIE](modules/editor-and-pie.md)
 - [에셋과 직렬화](modules/assets-and-serialization.md)

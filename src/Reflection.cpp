@@ -547,6 +547,220 @@ void registerEngineTypes() {
         {},
     });
     registry.registerType({
+        "HealthComponent",
+        &actorComponent,
+        [](Object* outer, std::string name) {
+            return std::make_unique<HealthComponent>(
+                std::move(name),
+                dynamic_cast<Actor*>(outer)
+            );
+        },
+        {
+            property<HealthComponent, float>(
+                "MaxHealth",
+                "Combat",
+                PropertyType::Float,
+                &HealthComponent::maxHealth,
+                &HealthComponent::setMaxHealth
+            ),
+            property<HealthComponent, float>(
+                "CurrentHealth",
+                "Combat",
+                PropertyType::Float,
+                &HealthComponent::currentHealth,
+                &HealthComponent::setCurrentHealth
+            ),
+        },
+    });
+    registry.registerType({
+        "ProjectileComponent",
+        &actorComponent,
+        [](Object* outer, std::string name) {
+            return std::make_unique<ProjectileComponent>(
+                std::move(name),
+                dynamic_cast<Actor*>(outer)
+            );
+        },
+        {
+            property<ProjectileComponent, float>(
+                "Damage",
+                "Combat",
+                PropertyType::Float,
+                &ProjectileComponent::damage,
+                &ProjectileComponent::setDamage
+            ),
+            property<ProjectileComponent, float>(
+                "Lifetime",
+                "Combat",
+                PropertyType::Float,
+                &ProjectileComponent::lifetime,
+                &ProjectileComponent::setLifetime
+            ),
+        },
+    });
+    registry.registerType({
+        "CombatComponent",
+        &actorComponent,
+        [](Object* outer, std::string name) {
+            return std::make_unique<CombatComponent>(
+                std::move(name),
+                dynamic_cast<Actor*>(outer)
+            );
+        },
+        {
+            property<CombatComponent, float>(
+                "ProjectileSpeed",
+                "Combat",
+                PropertyType::Float,
+                &CombatComponent::projectileSpeed,
+                &CombatComponent::setProjectileSpeed
+            ),
+            property<CombatComponent, float>(
+                "ProjectileDamage",
+                "Combat",
+                PropertyType::Float,
+                &CombatComponent::projectileDamage,
+                &CombatComponent::setProjectileDamage
+            ),
+            property<CombatComponent, float>(
+                "ProjectileLifetime",
+                "Combat",
+                PropertyType::Float,
+                &CombatComponent::projectileLifetime,
+                &CombatComponent::setProjectileLifetime
+            ),
+        },
+    });
+    registry.registerType({
+        "RigidBodyComponent",
+        &actorComponent,
+        [](Object* outer, std::string name) {
+            return std::make_unique<RigidBodyComponent>(
+                std::move(name),
+                dynamic_cast<Actor*>(outer)
+            );
+        },
+        {
+            {
+                "Velocity",
+                "Physics",
+                PropertyType::Vector3,
+                kEditSave,
+                [](const Object& object) -> PropertyValue {
+                    return dynamic_cast<const RigidBodyComponent&>(object)
+                        .velocity();
+                },
+                [](Object& object, const PropertyValue& value) {
+                    auto* rigidBody = dynamic_cast<RigidBodyComponent*>(&object);
+                    const auto* velocity = std::get_if<glm::vec3>(&value);
+                    if (rigidBody == nullptr || velocity == nullptr) {
+                        return false;
+                    }
+                    rigidBody->setVelocity(*velocity);
+                    return true;
+                },
+            },
+            property<RigidBodyComponent, float>(
+                "Mass",
+                "Physics",
+                PropertyType::Float,
+                &RigidBodyComponent::mass,
+                &RigidBodyComponent::setMass
+            ),
+            property<RigidBodyComponent, bool>(
+                "Dynamic",
+                "Physics",
+                PropertyType::Boolean,
+                &RigidBodyComponent::dynamic,
+                &RigidBodyComponent::setDynamic
+            ),
+            property<RigidBodyComponent, bool>(
+                "GravityEnabled",
+                "Physics",
+                PropertyType::Boolean,
+                &RigidBodyComponent::gravityEnabled,
+                &RigidBodyComponent::setGravityEnabled
+            ),
+        },
+    });
+    registry.registerType({
+        "SkeletalAnimationComponent",
+        &actorComponent,
+        [](Object* outer, std::string name) {
+            return std::make_unique<SkeletalAnimationComponent>(
+                std::move(name),
+                dynamic_cast<Actor*>(outer)
+            );
+        },
+        {
+            {
+                "ClipJson",
+                "Animation",
+                PropertyType::String,
+                kEditSave,
+                [](const Object& object) -> PropertyValue {
+                    return dynamic_cast<const SkeletalAnimationComponent&>(object)
+                        .clipJson();
+                },
+                [](Object& object, const PropertyValue& value) {
+                    auto* animation =
+                        dynamic_cast<SkeletalAnimationComponent*>(&object);
+                    const auto* clip = std::get_if<std::string>(&value);
+                    if (animation == nullptr || clip == nullptr) {
+                        return false;
+                    }
+                    animation->setClipJson(*clip);
+                    return true;
+                },
+            },
+            property<SkeletalAnimationComponent, bool>(
+                "Playing",
+                "Animation",
+                PropertyType::Boolean,
+                &SkeletalAnimationComponent::playing,
+                &SkeletalAnimationComponent::setPlaying
+            ),
+            property<SkeletalAnimationComponent, float>(
+                "PlaybackTime",
+                "Animation",
+                PropertyType::Float,
+                &SkeletalAnimationComponent::playbackTime,
+                &SkeletalAnimationComponent::setPlaybackTime
+            ),
+        },
+    });
+    registry.registerType({
+        "BlueprintComponent",
+        &actorComponent,
+        [](Object* outer, std::string name) {
+            return std::make_unique<BlueprintComponent>(
+                std::move(name),
+                dynamic_cast<Actor*>(outer)
+            );
+        },
+        {
+            {
+                "GraphJson",
+                "Blueprint",
+                PropertyType::String,
+                kEditSave,
+                [](const Object& object) -> PropertyValue {
+                    return dynamic_cast<const BlueprintComponent&>(object)
+                        .graphJson();
+                },
+                [](Object& object, const PropertyValue& value) {
+                    auto* blueprint = dynamic_cast<BlueprintComponent*>(&object);
+                    const auto* graph = std::get_if<std::string>(&value);
+                    if (blueprint == nullptr || graph == nullptr) {
+                        return false;
+                    }
+                    blueprint->setGraphJson(*graph);
+                    return true;
+                },
+            },
+        },
+    });
+    registry.registerType({
         "GameInstance",
         &object,
         [](Object*, std::string) {

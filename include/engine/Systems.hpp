@@ -33,6 +33,15 @@ struct MovementResult {
     bool blockedZ{false};
 };
 
+struct RigidBodyState {
+    Guid body;
+    glm::vec3 velocity{0.0F};
+    float mass{1.0F};
+    bool dynamic{true};
+    bool gravityEnabled{true};
+    bool grounded{false};
+};
+
 enum class OverlapEventType {
     Begin,
     Stay,
@@ -59,7 +68,8 @@ public:
         const glm::vec3& direction,
         float distance,
         const World& world,
-        CollisionChannel queryChannel = CollisionChannel::Visibility
+        CollisionChannel queryChannel = CollisionChannel::Visibility,
+        const BoxComponent* ignored = nullptr
     ) const;
     [[nodiscard]] std::optional<HitResult> sweep(
         const AABB& shape,
@@ -71,6 +81,12 @@ public:
     [[nodiscard]] MovementResult moveComponent(
         BoxComponent& moving,
         const glm::vec3& delta,
+        const World& world
+    ) const;
+    [[nodiscard]] MovementResult moveComponentStepped(
+        BoxComponent& moving,
+        const glm::vec3& delta,
+        float stepHeight,
         const World& world
     ) const;
     void updateOverlaps(const World& world);
@@ -101,12 +117,30 @@ private:
     std::vector<OverlapEvent> overlapEvents_;
 };
 
+class JoltRigidBodyAdapter {
+public:
+    /// Jolt 교체 지점을 작게 흉내 낸다. 현재는 AABB 이동과 중력만 자체 구현한다.
+    [[nodiscard]] MovementResult integrate(
+        BoxComponent& body,
+        RigidBodyState& state,
+        float deltaTime,
+        const World& world
+    ) const;
+    [[nodiscard]] const glm::vec3& gravity() const;
+    void setGravity(const glm::vec3& gravity);
+
+private:
+    glm::vec3 gravity_{0.0F, 0.0F, -980.0F};
+};
+
 class RenderScene {
 public:
     /// Component revision을 비교해 렌더러가 읽을 값 복사본만 보관한다.
     void sync(const World& world);
     [[nodiscard]] const std::vector<RenderProxy>& proxies() const;
     [[nodiscard]] const std::vector<DirectionalLightProxy>& lights() const;
+    [[nodiscard]] std::size_t opaqueProxyCount() const;
+    [[nodiscard]] std::size_t debugWireProxyCount() const;
     [[nodiscard]] std::size_t updatesLastSync() const;
 
 private:
@@ -121,17 +155,29 @@ enum class Key {
     A,
     S,
     D,
+    Q,
+    E,
+    Space,
     Escape,
     F5,
 };
 
+class OutputLog;
+
 class InputSystem {
 public:
     /// 플랫폼 키를 게임플레이 축 이름으로 변환한다. 키 자체의 수명은 Application에 있다.
+    void clearBindings();
     void bindAxis(std::string name, Key positive, Key negative);
+    void bindAction(std::string name, Key key);
+    [[nodiscard]] bool loadConfig(
+        const std::filesystem::path& path,
+        OutputLog* log = nullptr
+    );
     void setKeyDown(Key key, bool down);
     [[nodiscard]] bool keyDown(Key key) const;
     [[nodiscard]] float axis(std::string_view name) const;
+    [[nodiscard]] bool action(std::string_view name) const;
 
 private:
     struct AxisBinding {
@@ -140,6 +186,7 @@ private:
     };
 
     std::unordered_map<std::string, AxisBinding> axes_;
+    std::unordered_map<std::string, Key> actions_;
     std::unordered_map<Key, bool> keys_;
 };
 
@@ -159,12 +206,67 @@ struct AssetData {
     std::filesystem::path source;
 };
 
+struct StaticMeshAsset {
+    Guid guid;
+    MeshPrimitive primitive{MeshPrimitive::Cube};
+};
+
+struct MaterialAsset {
+    Guid guid;
+    MaterialInstance material;
+};
+
+struct TextureAsset {
+    Guid guid;
+    std::filesystem::path source;
+    std::string sourceFormat;
+};
+
+struct AssetImportResult {
+    bool success{false};
+    AssetData asset;
+    std::filesystem::path copiedSource;
+    std::filesystem::path metadata;
+    std::string error;
+};
+
+class AssetImporter {
+public:
+    /// 외부 glTF/texture 파일을 Content 아래 엔진 에셋 JSON과 .meta로 등록한다.
+    [[nodiscard]] static AssetImportResult importGltfAsStaticMesh(
+        const std::filesystem::path& source,
+        const std::filesystem::path& contentRoot,
+        OutputLog* log = nullptr
+    );
+    [[nodiscard]] static AssetImportResult importTexture(
+        const std::filesystem::path& source,
+        const std::filesystem::path& contentRoot,
+        OutputLog* log = nullptr
+    );
+};
+
 class AssetRegistry {
 public:
     /// Content 아래 .meta를 스캔하며 GPU 리소스는 소유하지 않는다.
     void scan(const std::filesystem::path& contentRoot, OutputLog* log = nullptr);
     [[nodiscard]] const std::vector<AssetData>& assets() const;
     [[nodiscard]] const AssetData* find(Guid guid) const;
+    [[nodiscard]] const AssetData* findByName(std::string_view name) const;
+    [[nodiscard]] std::vector<const AssetData*> findByType(
+        std::string_view type
+    ) const;
+    [[nodiscard]] std::optional<StaticMeshAsset> loadStaticMesh(
+        Guid guid,
+        OutputLog* log = nullptr
+    ) const;
+    [[nodiscard]] std::optional<MaterialAsset> loadMaterial(
+        Guid guid,
+        OutputLog* log = nullptr
+    ) const;
+    [[nodiscard]] std::optional<TextureAsset> loadTexture(
+        Guid guid,
+        OutputLog* log = nullptr
+    ) const;
 
 private:
     std::vector<AssetData> assets_;
@@ -183,27 +285,53 @@ public:
         const std::filesystem::path& path,
         OutputLog* log = nullptr
     );
+    /// World 객체 주소는 유지하고 내부 Actor와 시스템 상태만 JSON으로 교체한다.
+    static bool restore(
+        World& world,
+        std::string_view text,
+        OutputLog* log = nullptr
+    );
+    /// Actor와 소유 Component에 새 GUID를 부여해 같은 World에 복제한다.
+    [[nodiscard]] static Actor* duplicateActor(
+        World& world,
+        const Actor& source,
+        std::string name,
+        OutputLog* log = nullptr
+    );
+};
+
+struct PropertyChange {
+    Guid object;
+    std::string property;
+    PropertyValue before;
+    PropertyValue after;
 };
 
 class TransactionStack {
 public:
-    /// Details 편집 한 건의 이전/이후 값을 저장해 Undo와 Redo를 적용한다.
+    /// 프로퍼티 묶음 또는 World snapshot을 한 번의 Undo/Redo 단위로 저장한다.
     void record(
         Guid object,
         std::string property,
         PropertyValue before,
         PropertyValue after
     );
+    void recordGroup(std::vector<PropertyChange> changes);
+    void recordTransform(
+        Guid object,
+        const Transform& before,
+        const Transform& after
+    );
+    void recordSnapshot(std::string before, std::string after);
     bool undo(World& world);
     bool redo(World& world);
     void clear();
 
 private:
     struct Transaction {
-        Guid object;
-        std::string property;
-        PropertyValue before;
-        PropertyValue after;
+        std::vector<PropertyChange> changes;
+        std::string beforeSnapshot;
+        std::string afterSnapshot;
     };
 
     bool apply(World& world, const Transaction& transaction, bool useAfter);

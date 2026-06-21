@@ -1,5 +1,19 @@
 # 충돌
 
+## v0.8 Collision Channel 편집
+
+`BoxComponent`를 선택하면 Details 패널에서 `ObjectChannel`을 숫자가 아니라
+`WorldStatic`, `WorldDynamic`, `Pawn`, `Visibility`, `Camera` 콤보로 바꿀 수 있다.
+내부 저장은 reflection 호환을 위해 integer property를 그대로 사용하지만, UI는
+초보자가 채널 의미를 바로 볼 수 있게 이름으로 보여준다.
+
+## v0.8 Step Movement
+
+`CollisionWorld::moveComponentStepped`는 일반 `moveComponent`가 수평 이동에서
+막혔을 때 `stepHeight`만큼 위로 올려 다시 수평 이동을 시도한다. 성공하면 작은
+간격으로 아래로 내려오며 가능한 가장 낮은 위치에 캐릭터를 둔다. 아직 완전한
+캐릭터 컨트롤러는 아니지만, 낮은 턱과 계단을 처리하는 기본 아이디어를 보여준다.
+
 ## 목표
 
 BoxComponent가 만드는 AABB와 Block/Overlap/Ignore 응답, query와 이동 해결 과정을

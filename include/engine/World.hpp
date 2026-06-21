@@ -139,6 +139,7 @@ public:
     virtual void beginPlay();
     virtual void tick(float deltaTime);
     virtual void endPlay();
+    virtual void onActorDestroyed(Actor& actor);
 
 private:
     friend class World;

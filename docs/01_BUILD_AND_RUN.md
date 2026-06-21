@@ -10,8 +10,8 @@
 - OpenGL 3.3 이상을 지원하는 그래픽 드라이버
 - 문서 검사에 사용할 Python 3
 
-처음 configure할 때 CMake가 GLFW, GLM, Dear ImGui, ImGuizmo,
-`nlohmann/json`을 인터넷에서 내려받는다.
+처음 configure할 때 CMake가 GLFW, GLM, Dear ImGui docking, ImGuizmo,
+`nlohmann/json`, `stb_image_write`를 인터넷에서 내려받는다.
 
 ## Debug 빌드
 
@@ -40,12 +40,20 @@ ctest --preset windows-release
 
 | 입력 | 동작 |
 | --- | --- |
-| `W/A/S/D` | Simulate 또는 PIE에서 플레이어 이동 |
+| `RMB + W/A/S/D/Q/E` | Edit/Simulate 에디터 카메라 이동 |
+| `LMB`, `F` | 물체 선택, 선택 물체 포커스 |
+| `W/E/R` | 이동, 회전, 크기 기즈모 |
+| `Ctrl+D`, `Delete` | Actor 복제, 삭제 |
+| `W/A/S/D` | PIE에서 플레이어 이동 |
 | `F5` | Play In Editor 시작 또는 종료 |
+| `F9` | editor/viewport PNG와 metadata 저장 |
 | `Escape` | 프로그램 종료 |
 | Outliner 클릭 | Actor 선택 |
 | Details 수정 | reflection 프로퍼티 변경 |
 | `Save World` | `Content/Maps/Demo.world.json` 저장 |
+
+전체 실습은 [3D 에디터 첫 실습](03_EDITOR_QUICKSTART.md), 숨김 캡처 명령은
+[AI 시각 테스트](AI_VISUAL_TESTING.md)를 참고한다.
 
 ## 자주 만나는 문제
 
@@ -67,8 +75,9 @@ Ninja가 설치되어 있어야 한다.
 
 ### 셰이더 파일을 열지 못함
 
-실행 파일을 직접 옮기지 말고 CMake가 만든 위치에서 실행한다. 셰이더와 Content
-경로는 configure 시 저장소의 절대 경로로 지정된다.
+개발 빌드는 저장소 루트에서 실행한다. 다른 폴더로 옮길 때는 exe 하나만 복사하지
+말고 [이동식 배포 패키지](04_DISTRIBUTABLE_PACKAGE.md)를 만든다. 배포본에는 셰이더와
+Content, MCP manifest, GameModule SDK가 함께 들어간다.
 
 ## CI와 같은 검사
 

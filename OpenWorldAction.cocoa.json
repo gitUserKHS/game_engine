@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "transaction": "Create action prototype actors",
+  "commands": [
+    {"op": "spawn_actor", "type": "Character", "name": "Agent Hero", "alias": "hero"},
+    {"op": "add_component", "actor": "hero", "type": "HealthComponent", "name": "Health", "alias": "health"},
+    {"op": "set_property", "target": "health", "property": "MaxHealth", "value": 250},
+    {"op": "set_property", "target": "health", "property": "CurrentHealth", "value": 250},
+    {"op": "add_component", "actor": "hero", "type": "CombatComponent", "name": "Combat", "alias": "combat"},
+    {"op": "set_property", "target": "combat", "property": "ProjectileDamage", "value": 35},
+    {"op": "spawn_actor", "type": "PlayerController", "name": "Agent Controller", "alias": "controller"},
+    {"op": "possess", "controller": "controller", "pawn": "hero"},
+    {"op": "save_world"}
+  ]
+}

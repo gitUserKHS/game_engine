@@ -1,9 +1,87 @@
 #include "engine/Gameplay.hpp"
 
+#include <nlohmann/json.hpp>
+
 #include <glm/geometric.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <stdexcept>
+
+namespace {
+
+using Json = nlohmann::json;
+
+engine::PropertyValue blueprintValueFromJson(
+    engine::PropertyType type,
+    const Json& value
+) {
+    using engine::Guid;
+    using engine::PropertyType;
+
+    switch (type) {
+    case PropertyType::Boolean:
+        return value.get<bool>();
+    case PropertyType::Integer:
+        return value.get<int>();
+    case PropertyType::Float:
+        return value.get<float>();
+    case PropertyType::String:
+        return value.get<std::string>();
+    case PropertyType::Vector3:
+        return glm::vec3{
+            value.at(0).get<float>(),
+            value.at(1).get<float>(),
+            value.at(2).get<float>(),
+        };
+    case PropertyType::Guid:
+        return Guid::parse(value.get<std::string>()).value_or(Guid{});
+    }
+    return {};
+}
+
+const engine::PropertyDescriptor* findProperty(
+    const engine::Object& object,
+    std::string_view name
+) {
+    const engine::TypeDescriptor* type = object.typeDescriptor();
+    if (type == nullptr) {
+        return nullptr;
+    }
+    for (const engine::PropertyDescriptor* property : type->allProperties()) {
+        if (property->name == name) {
+            return property;
+        }
+    }
+    return nullptr;
+}
+
+glm::vec3 vectorFromJsonOr(
+    const Json& json,
+    std::string_view key,
+    const glm::vec3& fallback
+) {
+    const auto found = json.find(std::string{key});
+    if (found == json.end() || !found->is_array() || found->size() != 3) {
+        return fallback;
+    }
+    return {
+        found->at(0).get<float>(),
+        found->at(1).get<float>(),
+        found->at(2).get<float>(),
+    };
+}
+
+engine::Transform transformFromKeyJson(const Json& json) {
+    engine::Transform transform;
+    transform.location = vectorFromJsonOr(json, "location", transform.location);
+    transform.rotationDegrees =
+        vectorFromJsonOr(json, "rotation", transform.rotationDegrees);
+    transform.scale = vectorFromJsonOr(json, "scale", transform.scale);
+    return transform;
+}
+
+} // namespace
 
 namespace engine {
 
@@ -34,8 +112,11 @@ void Character::onConstruction() {
     collision_->setRelativeLocation({0.0F, 0.0F, 45.0F});
     setRootComponent(collision_);
 
+    auto& bodyBone = addComponent<SceneComponent>("BodyBone");
+    bodyBone.attachTo(collision_);
+
     auto& mesh = addComponent<StaticMeshComponent>("PlayerMesh");
-    mesh.attachTo(collision_);
+    mesh.attachTo(&bodyBone);
     Transform meshTransform;
     meshTransform.scale = {90.0F, 90.0F, 90.0F};
     mesh.setRelativeTransform(meshTransform);
@@ -53,6 +134,22 @@ void Character::onConstruction() {
     cameraTransform.location = {-850.0F, 0.0F, 950.0F};
     cameraTransform.rotationDegrees = {0.0F, 42.0F, 0.0F};
     camera.setRelativeTransform(cameraTransform);
+
+    auto& animation = addComponent<SkeletalAnimationComponent>("Animation");
+    animation.setClipJson(R"({
+  "length": 1.0,
+  "loop": true,
+  "tracks": [
+    {
+      "bone": "BodyBone",
+      "keys": [
+        {"time": 0.0, "rotation": [0.0, 0.0, -3.0]},
+        {"time": 0.5, "rotation": [0.0, 0.0, 3.0]},
+        {"time": 1.0, "rotation": [0.0, 0.0, -3.0]}
+      ]
+    }
+  ]
+})");
 }
 
 void Character::tick(float deltaTime) {
@@ -68,9 +165,10 @@ void Character::tick(float deltaTime) {
         pendingMovement_ = glm::normalize(pendingMovement_);
     }
     const glm::vec3 delta = pendingMovement_ * moveSpeed_ * deltaTime;
-    lastMovement_ = world()->collision().moveComponent(
+    lastMovement_ = world()->collision().moveComponentStepped(
         *collision_,
         delta,
+        stepHeight_,
         *world()
     );
     pendingMovement_ = {0.0F, 0.0F, 0.0F};
@@ -121,6 +219,12 @@ void Controller::setPawnGuid(Guid guid) {
     possess(dynamic_cast<Pawn*>(world()->findActor(guid)));
 }
 
+void Controller::onActorDestroyed(Actor& actor) {
+    if (pawn_ == &actor) {
+        possess(nullptr);
+    }
+}
+
 PlayerController::PlayerController(std::string name, World* world)
     : Controller(std::move(name), world) {
     tickSettings().enabled = true;
@@ -162,6 +266,570 @@ std::string_view GameMode::typeName() const {
     return "GameMode";
 }
 
+HealthComponent::HealthComponent(std::string name, Actor* owner)
+    : ActorComponent(std::move(name), owner) {}
+
+std::string_view HealthComponent::typeName() const {
+    return "HealthComponent";
+}
+
+float HealthComponent::maxHealth() const {
+    return maxHealth_;
+}
+
+void HealthComponent::setMaxHealth(float value) {
+    maxHealth_ = std::max(value, 1.0F);
+    currentHealth_ = std::clamp(currentHealth_, 0.0F, maxHealth_);
+}
+
+float HealthComponent::currentHealth() const {
+    return currentHealth_;
+}
+
+void HealthComponent::setCurrentHealth(float value) {
+    currentHealth_ = std::clamp(value, 0.0F, maxHealth_);
+}
+
+bool HealthComponent::dead() const {
+    return currentHealth_ <= 0.0F;
+}
+
+void HealthComponent::applyDamage(float amount) {
+    if (amount <= 0.0F) {
+        return;
+    }
+    setCurrentHealth(currentHealth_ - amount);
+}
+
+void HealthComponent::heal(float amount) {
+    if (amount <= 0.0F) {
+        return;
+    }
+    setCurrentHealth(currentHealth_ + amount);
+}
+
+ProjectileComponent::ProjectileComponent(std::string name, Actor* owner)
+    : ActorComponent(std::move(name), owner) {
+    tickSettings().enabled = true;
+    tickSettings().group = TickGroup::Physics;
+}
+
+std::string_view ProjectileComponent::typeName() const {
+    return "ProjectileComponent";
+}
+
+void ProjectileComponent::tickComponent(float deltaTime) {
+    Actor* projectile = owner();
+    if (projectile == nullptr || projectile->world() == nullptr ||
+        projectile->rootComponent() == nullptr) {
+        return;
+    }
+
+    age_ += deltaTime;
+    if (age_ >= lifetime_) {
+        projectile->world()->destroyActor(*projectile);
+        return;
+    }
+
+    const glm::vec3 delta = velocity_ * deltaTime;
+    const float distance = glm::length(delta);
+    if (distance <= 0.0001F) {
+        return;
+    }
+
+    const glm::vec3 origin = projectile->actorTransform().location;
+    const auto hit = projectile->world()->collision().raycast(
+        origin,
+        delta,
+        distance,
+        *projectile->world(),
+        CollisionChannel::Pawn,
+        projectile->findComponent<BoxComponent>()
+    );
+    if (hit.has_value()) {
+        Actor* target = hit->component->owner();
+        if (target != nullptr && target != projectile &&
+            target->guid() != instigator_) {
+            if (auto* health = target->findComponent<HealthComponent>()) {
+                health->applyDamage(damage_);
+            }
+        }
+        projectile->world()->destroyActor(*projectile);
+        return;
+    }
+
+    Transform transform = projectile->rootComponent()->relativeTransform();
+    transform.location += delta;
+    projectile->rootComponent()->setRelativeTransform(transform);
+}
+
+const glm::vec3& ProjectileComponent::velocity() const {
+    return velocity_;
+}
+
+void ProjectileComponent::setVelocity(const glm::vec3& velocity) {
+    velocity_ = velocity;
+}
+
+float ProjectileComponent::damage() const {
+    return damage_;
+}
+
+void ProjectileComponent::setDamage(float damage) {
+    damage_ = std::max(damage, 0.0F);
+}
+
+float ProjectileComponent::lifetime() const {
+    return lifetime_;
+}
+
+void ProjectileComponent::setLifetime(float seconds) {
+    lifetime_ = std::max(seconds, 0.01F);
+}
+
+void ProjectileComponent::setInstigator(Actor* actor) {
+    instigator_ = actor == nullptr ? Guid{} : actor->guid();
+}
+
+CombatComponent::CombatComponent(std::string name, Actor* owner)
+    : ActorComponent(std::move(name), owner) {}
+
+std::string_view CombatComponent::typeName() const {
+    return "CombatComponent";
+}
+
+float CombatComponent::projectileSpeed() const {
+    return projectileSpeed_;
+}
+
+void CombatComponent::setProjectileSpeed(float speed) {
+    projectileSpeed_ = std::max(speed, 0.0F);
+}
+
+float CombatComponent::projectileDamage() const {
+    return projectileDamage_;
+}
+
+void CombatComponent::setProjectileDamage(float damage) {
+    projectileDamage_ = std::max(damage, 0.0F);
+}
+
+float CombatComponent::projectileLifetime() const {
+    return projectileLifetime_;
+}
+
+void CombatComponent::setProjectileLifetime(float seconds) {
+    projectileLifetime_ = std::max(seconds, 0.01F);
+}
+
+Actor* CombatComponent::fireProjectile(const glm::vec3& direction) {
+    Actor* source = owner();
+    if (source == nullptr || source->world() == nullptr ||
+        glm::dot(direction, direction) <= 0.0001F) {
+        return nullptr;
+    }
+
+    const glm::vec3 forward = glm::normalize(direction);
+    Actor& projectile = source->world()->spawnActor<Actor>("Projectile");
+    auto& collision = projectile.addComponent<BoxComponent>("Collision");
+    collision.setExtent({8.0F, 8.0F, 8.0F});
+    collision.setObjectChannel(CollisionChannel::WorldDynamic);
+    collision.setDrawDebug(true);
+    collision.setRelativeLocation(source->actorTransform().location + forward * 70.0F);
+    projectile.setRootComponent(&collision);
+
+    auto& mesh = projectile.addComponent<StaticMeshComponent>("Mesh");
+    mesh.attachTo(&collision);
+    Transform meshTransform;
+    meshTransform.scale = {16.0F, 16.0F, 16.0F};
+    mesh.setRelativeTransform(meshTransform);
+    MaterialInstance material;
+    material.baseColor = {1.0F, 0.78F, 0.22F};
+    mesh.setMaterial(material);
+
+    auto& projectileComponent =
+        projectile.addComponent<ProjectileComponent>("Projectile");
+    projectileComponent.setVelocity(forward * projectileSpeed_);
+    projectileComponent.setDamage(projectileDamage_);
+    projectileComponent.setLifetime(projectileLifetime_);
+    projectileComponent.setInstigator(source);
+    return &projectile;
+}
+
+RigidBodyComponent::RigidBodyComponent(std::string name, Actor* owner)
+    : ActorComponent(std::move(name), owner) {
+    tickSettings().enabled = true;
+    tickSettings().group = TickGroup::Physics;
+    state_.body = guid();
+}
+
+std::string_view RigidBodyComponent::typeName() const {
+    return "RigidBodyComponent";
+}
+
+void RigidBodyComponent::tickComponent(float deltaTime) {
+    Actor* actor = owner();
+    if (actor == nullptr || actor->world() == nullptr) {
+        return;
+    }
+    BoxComponent* body = actor->findComponent<BoxComponent>();
+    if (body == nullptr || !body->collisionEnabled()) {
+        return;
+    }
+    state_.body = guid();
+    lastMovement_ = adapter_.integrate(*body, state_, deltaTime, *actor->world());
+}
+
+const glm::vec3& RigidBodyComponent::velocity() const {
+    return state_.velocity;
+}
+
+void RigidBodyComponent::setVelocity(const glm::vec3& velocity) {
+    state_.velocity = velocity;
+}
+
+float RigidBodyComponent::mass() const {
+    return state_.mass;
+}
+
+void RigidBodyComponent::setMass(float mass) {
+    state_.mass = std::max(mass, 0.001F);
+}
+
+bool RigidBodyComponent::dynamic() const {
+    return state_.dynamic;
+}
+
+void RigidBodyComponent::setDynamic(bool dynamic) {
+    state_.dynamic = dynamic;
+}
+
+bool RigidBodyComponent::gravityEnabled() const {
+    return state_.gravityEnabled;
+}
+
+void RigidBodyComponent::setGravityEnabled(bool enabled) {
+    state_.gravityEnabled = enabled;
+}
+
+bool RigidBodyComponent::grounded() const {
+    return state_.grounded;
+}
+
+const MovementResult& RigidBodyComponent::lastMovement() const {
+    return lastMovement_;
+}
+
+SkeletalAnimationComponent::SkeletalAnimationComponent(
+    std::string name,
+    Actor* owner
+)
+    : ActorComponent(std::move(name), owner) {
+    tickSettings().enabled = true;
+    tickSettings().group = TickGroup::PostUpdate;
+}
+
+std::string_view SkeletalAnimationComponent::typeName() const {
+    return "SkeletalAnimationComponent";
+}
+
+void SkeletalAnimationComponent::tickComponent(float deltaTime) {
+    if (!playing_ || tracks_.empty()) {
+        return;
+    }
+    playbackTime_ += std::max(deltaTime, 0.0F);
+    (void)applyPose(playbackTime_);
+}
+
+const std::string& SkeletalAnimationComponent::clipJson() const {
+    return clipJson_;
+}
+
+void SkeletalAnimationComponent::setClipJson(std::string clip) {
+    clipJson_ = std::move(clip);
+    rebuildClip();
+}
+
+bool SkeletalAnimationComponent::playing() const {
+    return playing_;
+}
+
+void SkeletalAnimationComponent::setPlaying(bool playing) {
+    playing_ = playing;
+}
+
+float SkeletalAnimationComponent::playbackTime() const {
+    return playbackTime_;
+}
+
+void SkeletalAnimationComponent::setPlaybackTime(float seconds) {
+    playbackTime_ = std::max(seconds, 0.0F);
+}
+
+float SkeletalAnimationComponent::length() const {
+    return length_;
+}
+
+int SkeletalAnimationComponent::appliedPoseCount() const {
+    return appliedPoseCount_;
+}
+
+int SkeletalAnimationComponent::applyPose(float seconds) {
+    if (tracks_.empty()) {
+        return 0;
+    }
+
+    float localTime = std::max(seconds, 0.0F);
+    if (length_ > 0.0001F) {
+        if (loop_) {
+            localTime = std::fmod(localTime, length_);
+        } else {
+            localTime = std::min(localTime, length_);
+        }
+    }
+
+    int applied = 0;
+    for (const Track& track : tracks_) {
+        SceneComponent* bone = findBone(track.bone);
+        if (bone == nullptr || track.keys.empty()) {
+            continue;
+        }
+        bone->setRelativeTransform(sampleTrack(track, localTime));
+        ++applied;
+    }
+    appliedPoseCount_ += applied;
+    return applied;
+}
+
+SceneComponent* SkeletalAnimationComponent::findBone(
+    std::string_view boneName
+) const {
+    Actor* actor = owner();
+    if (actor == nullptr) {
+        return nullptr;
+    }
+    for (const auto& component : actor->components()) {
+        auto* scene = dynamic_cast<SceneComponent*>(component.get());
+        if (scene != nullptr && scene->name() == boneName) {
+            return scene;
+        }
+    }
+    return nullptr;
+}
+
+Transform SkeletalAnimationComponent::sampleTrack(
+    const Track& track,
+    float seconds
+) const {
+    if (track.keys.size() == 1) {
+        return track.keys.front().transform;
+    }
+    if (seconds <= track.keys.front().time) {
+        return track.keys.front().transform;
+    }
+
+    for (std::size_t index = 1; index < track.keys.size(); ++index) {
+        const Keyframe& previous = track.keys[index - 1];
+        const Keyframe& next = track.keys[index];
+        if (seconds > next.time) {
+            continue;
+        }
+        const float duration = std::max(next.time - previous.time, 0.0001F);
+        const float alpha = std::clamp((seconds - previous.time) / duration, 0.0F, 1.0F);
+        Transform result;
+        result.location =
+            previous.transform.location +
+            (next.transform.location - previous.transform.location) * alpha;
+        result.rotationDegrees =
+            previous.transform.rotationDegrees +
+            (next.transform.rotationDegrees - previous.transform.rotationDegrees) * alpha;
+        result.scale =
+            previous.transform.scale +
+            (next.transform.scale - previous.transform.scale) * alpha;
+        return result;
+    }
+    return track.keys.back().transform;
+}
+
+void SkeletalAnimationComponent::rebuildClip() {
+    tracks_.clear();
+    length_ = 0.0F;
+    playbackTime_ = 0.0F;
+    appliedPoseCount_ = 0;
+    loop_ = true;
+    if (clipJson_.empty()) {
+        return;
+    }
+
+    try {
+        const Json clip = Json::parse(clipJson_);
+        length_ = std::max(clip.value("length", 0.0F), 0.0F);
+        loop_ = clip.value("loop", true);
+
+        for (const Json& trackJson : clip.value("tracks", Json::array())) {
+            Track track;
+            track.bone = trackJson.value("bone", std::string{});
+            if (track.bone.empty()) {
+                continue;
+            }
+            for (const Json& keyJson : trackJson.value("keys", Json::array())) {
+                Keyframe key;
+                key.time = std::max(keyJson.value("time", 0.0F), 0.0F);
+                key.transform = transformFromKeyJson(keyJson);
+                track.keys.push_back(key);
+                length_ = std::max(length_, key.time);
+            }
+            std::sort(
+                track.keys.begin(),
+                track.keys.end(),
+                [](const Keyframe& first, const Keyframe& second) {
+                    return first.time < second.time;
+                }
+            );
+            if (!track.keys.empty()) {
+                tracks_.push_back(std::move(track));
+            }
+        }
+    } catch (const std::exception&) {
+        tracks_.clear();
+        length_ = 0.0F;
+    }
+}
+
+BlueprintComponent::BlueprintComponent(std::string name, Actor* owner)
+    : ActorComponent(std::move(name), owner) {
+    tickSettings().enabled = true;
+    tickSettings().group = TickGroup::PostUpdate;
+}
+
+std::string_view BlueprintComponent::typeName() const {
+    return "BlueprintComponent";
+}
+
+void BlueprintComponent::beginPlay() {
+    (void)executeEvent("BeginPlay");
+}
+
+void BlueprintComponent::tickComponent(float deltaTime) {
+    (void)executeEvent("Tick", deltaTime);
+}
+
+const std::string& BlueprintComponent::graphJson() const {
+    return graphJson_;
+}
+
+void BlueprintComponent::setGraphJson(std::string graph) {
+    graphJson_ = std::move(graph);
+    rebuildActions();
+}
+
+int BlueprintComponent::executionCount() const {
+    return executionCount_;
+}
+
+int BlueprintComponent::executeEvent(
+    std::string_view eventName,
+    float deltaTime
+) {
+    rebuildActions();
+    int executed = 0;
+    for (const Action& action : actions_) {
+        if (action.eventName == eventName && applyAction(action, deltaTime)) {
+            ++executed;
+            ++executionCount_;
+        }
+    }
+    return executed;
+}
+
+Object* BlueprintComponent::resolveTarget(const Action& action) const {
+    Actor* actor = owner();
+    if (actor == nullptr) {
+        return nullptr;
+    }
+    if (action.target.empty() || action.target == "Owner") {
+        return actor;
+    }
+
+    for (const auto& component : actor->components()) {
+        if (component->name() == action.target ||
+            component->typeName() == action.target) {
+            return component.get();
+        }
+        const TypeDescriptor* type = component->typeDescriptor();
+        const TypeDescriptor* requested =
+            ReflectionRegistry::instance().find(action.target);
+        if (type != nullptr && requested != nullptr && type->isA(*requested)) {
+            return component.get();
+        }
+    }
+    return nullptr;
+}
+
+bool BlueprintComponent::applyAction(
+    const Action& action,
+    float deltaTime
+) {
+    Object* target = resolveTarget(action);
+    if (target == nullptr) {
+        return false;
+    }
+    const PropertyDescriptor* property = findProperty(*target, action.property);
+    if (property == nullptr || !property->setter) {
+        return false;
+    }
+
+    if (action.action == "SetProperty") {
+        return property->setter(*target, action.value);
+    }
+
+    if (action.action == "AddFloat") {
+        if (!property->getter || property->type != PropertyType::Float) {
+            return false;
+        }
+        const PropertyValue currentValue = property->getter(*target);
+        const auto* current = std::get_if<float>(&currentValue);
+        const auto* amount = std::get_if<float>(&action.value);
+        if (current == nullptr || amount == nullptr) {
+            return false;
+        }
+        const float scale = action.scaleByDelta ? deltaTime : 1.0F;
+        return property->setter(*target, *current + (*amount * scale));
+    }
+
+    return false;
+}
+
+void BlueprintComponent::rebuildActions() {
+    actions_.clear();
+    if (graphJson_.empty()) {
+        return;
+    }
+
+    try {
+        const Json graph = Json::parse(graphJson_);
+        for (const Json& node : graph.value("nodes", Json::array())) {
+            Action action;
+            action.eventName = node.value("event", std::string{});
+            action.action = node.value("action", std::string{});
+            action.target = node.value("target", std::string{"Owner"});
+            action.property = node.value("property", std::string{});
+            action.scaleByDelta = node.value("scaleByDelta", false);
+
+            Object* target = resolveTarget(action);
+            const PropertyDescriptor* property =
+                target == nullptr ? nullptr : findProperty(*target, action.property);
+            if (property == nullptr || !node.contains("value")) {
+                continue;
+            }
+            action.value = blueprintValueFromJson(property->type, node.at("value"));
+            actions_.push_back(std::move(action));
+        }
+    } catch (const std::exception&) {
+        actions_.clear();
+    }
+}
+
 GameInstance::GameInstance()
     : Object("GameInstance", nullptr) {}
 
@@ -184,6 +852,13 @@ void EngineRuntime::setEditWorld(std::unique_ptr<World> world) {
 }
 
 World& EngineRuntime::editWorld() {
+    if (editWorld_ == nullptr) {
+        throw std::runtime_error("EngineRuntime has no edit World.");
+    }
+    return *editWorld_;
+}
+
+const World& EngineRuntime::editWorld() const {
     if (editWorld_ == nullptr) {
         throw std::runtime_error("EngineRuntime has no edit World.");
     }

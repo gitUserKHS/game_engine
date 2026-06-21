@@ -6,14 +6,24 @@
 #include <glm/geometric.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <limits>
 #include <map>
 #include <sstream>
+#include <unordered_map>
 
 namespace {
 
 using Json = nlohmann::json;
+
+std::string pathToUtf8(const std::filesystem::path& path) {
+    const std::u8string utf8 = path.u8string();
+    return {
+        reinterpret_cast<const char*>(utf8.data()),
+        utf8.size(),
+    };
+}
 
 Json vectorToJson(const glm::vec3& value) {
     return Json::array({value.x, value.y, value.z});
@@ -67,6 +77,153 @@ engine::PropertyValue propertyFromJson(
     }
     }
     return {};
+}
+
+std::optional<Json> readJsonFile(
+    const std::filesystem::path& path,
+    engine::OutputLog* log
+) {
+    std::ifstream stream(path);
+    if (!stream) {
+        if (log != nullptr) {
+            log->write("Could not open asset file: " + pathToUtf8(path));
+        }
+        return std::nullopt;
+    }
+
+    try {
+        Json json;
+        stream >> json;
+        return json;
+    } catch (const std::exception& exception) {
+        if (log != nullptr) {
+            log->write(
+                "Could not parse asset file " + pathToUtf8(path) + ": " +
+                exception.what()
+            );
+        }
+        return std::nullopt;
+    }
+}
+
+engine::MeshPrimitive meshPrimitiveFromText(std::string_view text) {
+    if (text == "Cube") {
+        return engine::MeshPrimitive::Cube;
+    }
+    return engine::MeshPrimitive::Cube;
+}
+
+glm::vec3 jsonVectorOr(
+    const Json& json,
+    std::string_view key,
+    const glm::vec3& fallback
+) {
+    const auto found = json.find(std::string{key});
+    if (found == json.end() || !found->is_array() || found->size() != 3) {
+        return fallback;
+    }
+    return {
+        found->at(0).get<float>(),
+        found->at(1).get<float>(),
+        found->at(2).get<float>(),
+    };
+}
+
+std::string lowerAscii(std::string text) {
+    for (char& character : text) {
+        character = static_cast<char>(
+            std::tolower(static_cast<unsigned char>(character))
+        );
+    }
+    return text;
+}
+
+std::string extensionLower(const std::filesystem::path& path) {
+    return lowerAscii(path.extension().string());
+}
+
+std::optional<engine::Key> keyFromText(std::string text) {
+    text = lowerAscii(std::move(text));
+    if (text == "w") {
+        return engine::Key::W;
+    }
+    if (text == "a") {
+        return engine::Key::A;
+    }
+    if (text == "s") {
+        return engine::Key::S;
+    }
+    if (text == "d") {
+        return engine::Key::D;
+    }
+    if (text == "q") {
+        return engine::Key::Q;
+    }
+    if (text == "e") {
+        return engine::Key::E;
+    }
+    if (text == "space") {
+        return engine::Key::Space;
+    }
+    if (text == "escape") {
+        return engine::Key::Escape;
+    }
+    if (text == "f5") {
+        return engine::Key::F5;
+    }
+    return std::nullopt;
+}
+
+std::filesystem::path uniqueAssetPath(
+    const std::filesystem::path& directory,
+    const std::filesystem::path& preferredName
+) {
+    std::filesystem::path candidate = directory / preferredName;
+    if (!std::filesystem::exists(candidate)) {
+        return candidate;
+    }
+
+    const std::filesystem::path stem = preferredName.stem();
+    const std::filesystem::path extension = preferredName.extension();
+    for (int suffix = 2;; ++suffix) {
+        candidate = directory /
+                    (stem.wstring() + L" " + std::to_wstring(suffix) +
+                     extension.wstring());
+        if (!std::filesystem::exists(candidate)) {
+            return candidate;
+        }
+    }
+}
+
+void logImportFailure(
+    engine::AssetImportResult& result,
+    std::string message,
+    engine::OutputLog* log
+) {
+    result.success = false;
+    result.error = std::move(message);
+    if (log != nullptr) {
+        log->write(result.error);
+    }
+}
+
+engine::Guid guidFromExistingMeta(const std::filesystem::path& metaPath) {
+    const std::optional<Json> meta = readJsonFile(metaPath, nullptr);
+    if (!meta.has_value() || !meta->contains("guid")) {
+        return engine::Guid::create();
+    }
+    return engine::Guid::parse(meta->value("guid", ""))
+        .value_or(engine::Guid::create());
+}
+
+bool writeJsonFile(const std::filesystem::path& path, const Json& json) {
+    std::filesystem::create_directories(path.parent_path());
+    std::ofstream stream(path);
+    if (!stream) {
+        return false;
+    }
+    stream << json.dump(2);
+    return true;
 }
 
 Json serializeProperties(const engine::Object& object) {
@@ -167,7 +324,8 @@ std::optional<HitResult> CollisionWorld::raycast(
     const glm::vec3& direction,
     float distance,
     const World& world,
-    CollisionChannel queryChannel
+    CollisionChannel queryChannel,
+    const BoxComponent* ignored
 ) const {
     if (distance <= 0.0F || glm::dot(direction, direction) <= 0.000001F) {
         return std::nullopt;
@@ -178,7 +336,8 @@ std::optional<HitResult> CollisionWorld::raycast(
     float closestDistance = distance;
 
     for (BoxComponent* box : world.componentsOfType<BoxComponent>()) {
-        if (!box->collisionEnabled() ||
+        if (box == ignored ||
+            !box->collisionEnabled() ||
             box->responseTo(queryChannel) == CollisionResponse::Ignore) {
             continue;
         }
@@ -304,6 +463,95 @@ MovementResult CollisionWorld::moveComponent(
     attemptAxis(2, result.blockedZ);
     moving.setRelativeLocation(result.location);
     return result;
+}
+
+MovementResult CollisionWorld::moveComponentStepped(
+    BoxComponent& moving,
+    const glm::vec3& delta,
+    float stepHeight,
+    const World& world
+) const {
+    const Transform original = moving.relativeTransform();
+    const MovementResult normal = moveComponent(moving, delta, world);
+    if ((!normal.blockedX && !normal.blockedY) || stepHeight <= 0.0F) {
+        return normal;
+    }
+
+    const glm::vec3 horizontal{delta.x, delta.y, 0.0F};
+    Transform stepped = original;
+    stepped.location.z += stepHeight;
+    if (blocksAt(moving, stepped.location, world)) {
+        moving.setRelativeTransform(original);
+        moving.setRelativeLocation(normal.location);
+        return normal;
+    }
+
+    moving.setRelativeTransform(stepped);
+    MovementResult horizontalResult = moveComponent(moving, horizontal, world);
+    if (horizontalResult.blockedX || horizontalResult.blockedY) {
+        moving.setRelativeTransform(original);
+        moving.setRelativeLocation(normal.location);
+        return normal;
+    }
+
+    glm::vec3 accepted = moving.relativeTransform().location;
+    constexpr int settleSteps = 8;
+    const float stepDown = stepHeight / static_cast<float>(settleSteps);
+    for (int step = 0; step < settleSteps; ++step) {
+        glm::vec3 candidate = accepted;
+        candidate.z -= stepDown;
+        if (blocksAt(moving, candidate, world)) {
+            break;
+        }
+        accepted = candidate;
+    }
+
+    moving.setRelativeLocation(accepted);
+    horizontalResult.location = accepted;
+    horizontalResult.blockedZ = false;
+    return horizontalResult;
+}
+
+MovementResult JoltRigidBodyAdapter::integrate(
+    BoxComponent& body,
+    RigidBodyState& state,
+    float deltaTime,
+    const World& world
+) const {
+    if (!state.dynamic || deltaTime <= 0.0F) {
+        state.grounded = false;
+        return MovementResult{body.relativeTransform().location};
+    }
+
+    if (state.gravityEnabled) {
+        state.velocity += gravity_ * deltaTime;
+    }
+
+    const glm::vec3 delta = state.velocity * deltaTime;
+    MovementResult result = world.collision().moveComponent(body, delta, world);
+    if (result.blockedX) {
+        state.velocity.x = 0.0F;
+    }
+    if (result.blockedY) {
+        state.velocity.y = 0.0F;
+    }
+    if (result.blockedZ) {
+        if (state.velocity.z < 0.0F) {
+            state.grounded = true;
+        }
+        state.velocity.z = 0.0F;
+    } else {
+        state.grounded = false;
+    }
+    return result;
+}
+
+const glm::vec3& JoltRigidBodyAdapter::gravity() const {
+    return gravity_;
+}
+
+void JoltRigidBodyAdapter::setGravity(const glm::vec3& gravity) {
+    gravity_ = gravity;
 }
 
 void CollisionWorld::updateOverlaps(const World& world) {
@@ -448,12 +696,84 @@ const std::vector<DirectionalLightProxy>& RenderScene::lights() const {
     return lights_;
 }
 
+std::size_t RenderScene::opaqueProxyCount() const {
+    return static_cast<std::size_t>(std::count_if(
+        proxies_.begin(),
+        proxies_.end(),
+        [](const RenderProxy& proxy) {
+            return !proxy.wireframe;
+        }
+    ));
+}
+
+std::size_t RenderScene::debugWireProxyCount() const {
+    return static_cast<std::size_t>(std::count_if(
+        proxies_.begin(),
+        proxies_.end(),
+        [](const RenderProxy& proxy) {
+            return proxy.wireframe;
+        }
+    ));
+}
+
 std::size_t RenderScene::updatesLastSync() const {
     return updatesLastSync_;
 }
 
+void InputSystem::clearBindings() {
+    axes_.clear();
+    actions_.clear();
+}
+
 void InputSystem::bindAxis(std::string name, Key positive, Key negative) {
     axes_.insert_or_assign(std::move(name), AxisBinding{positive, negative});
+}
+
+void InputSystem::bindAction(std::string name, Key key) {
+    actions_.insert_or_assign(std::move(name), key);
+}
+
+bool InputSystem::loadConfig(
+    const std::filesystem::path& path,
+    OutputLog* log
+) {
+    const std::optional<Json> json = readJsonFile(path, log);
+    if (!json.has_value()) {
+        return false;
+    }
+
+    std::unordered_map<std::string, AxisBinding> loadedAxes;
+    std::unordered_map<std::string, Key> loadedActions;
+    for (const Json& axis : json->value("axes", Json::array())) {
+        const std::string name = axis.value("name", std::string{});
+        const auto positive = keyFromText(axis.value("positive", std::string{}));
+        const auto negative = keyFromText(axis.value("negative", std::string{}));
+        if (name.empty() || !positive.has_value() || !negative.has_value()) {
+            if (log != nullptr) {
+                log->write("Skipped invalid input axis binding.");
+            }
+            continue;
+        }
+        loadedAxes.insert_or_assign(name, AxisBinding{*positive, *negative});
+    }
+    for (const Json& action : json->value("actions", Json::array())) {
+        const std::string name = action.value("name", std::string{});
+        const auto key = keyFromText(action.value("key", std::string{}));
+        if (name.empty() || !key.has_value()) {
+            if (log != nullptr) {
+                log->write("Skipped invalid input action binding.");
+            }
+            continue;
+        }
+        loadedActions.insert_or_assign(name, *key);
+    }
+
+    axes_ = std::move(loadedAxes);
+    actions_ = std::move(loadedActions);
+    if (log != nullptr) {
+        log->write("Input config loaded: " + pathToUtf8(path));
+    }
+    return true;
 }
 
 void InputSystem::setKeyDown(Key key, bool down) {
@@ -474,12 +794,163 @@ float InputSystem::axis(std::string_view name) const {
            (keyDown(found->second.negative) ? 1.0F : 0.0F);
 }
 
+bool InputSystem::action(std::string_view name) const {
+    const auto found = actions_.find(std::string{name});
+    return found != actions_.end() && keyDown(found->second);
+}
+
 void OutputLog::write(std::string message) {
     messages_.push_back(std::move(message));
 }
 
 const std::vector<std::string>& OutputLog::messages() const {
     return messages_;
+}
+
+AssetImportResult AssetImporter::importGltfAsStaticMesh(
+    const std::filesystem::path& source,
+    const std::filesystem::path& contentRoot,
+    OutputLog* log
+) {
+    AssetImportResult result;
+    if (!std::filesystem::exists(source)) {
+        logImportFailure(result, "glTF import source does not exist.", log);
+        return result;
+    }
+
+    const std::string extension = extensionLower(source);
+    if (extension != ".gltf" && extension != ".glb") {
+        logImportFailure(result, "glTF import requires .gltf or .glb.", log);
+        return result;
+    }
+    if (extension == ".gltf") {
+        const std::optional<Json> gltf = readJsonFile(source, log);
+        if (!gltf.has_value() || !gltf->contains("asset")) {
+            logImportFailure(result, "glTF file is missing asset metadata.", log);
+            return result;
+        }
+    }
+
+    const std::filesystem::path directory =
+        contentRoot / "Imported" / "Meshes";
+    std::filesystem::create_directories(directory);
+    const std::filesystem::path assetJson = uniqueAssetPath(
+        directory,
+        source.stem().wstring() + L".asset.json"
+    );
+    const std::filesystem::path copiedSource = uniqueAssetPath(
+        directory,
+        source.filename()
+    );
+
+    std::error_code copyError;
+    std::filesystem::copy_file(
+        source,
+        copiedSource,
+        std::filesystem::copy_options::overwrite_existing,
+        copyError
+    );
+    if (copyError) {
+        logImportFailure(result, "Could not copy glTF source file.", log);
+        return result;
+    }
+
+    std::filesystem::path meta = assetJson;
+    meta += L".meta";
+    const Guid guid = guidFromExistingMeta(meta);
+    const std::string name = pathToUtf8(source.stem());
+    const Json asset{
+        {"type", "StaticMesh"},
+        {"primitive", "Cube"},
+        {"source", pathToUtf8(copiedSource.filename())},
+        {"sourceFormat", extension == ".glb" ? "glb" : "glTF"},
+    };
+    const Json metadata{
+        {"guid", guid.toString()},
+        {"name", name},
+        {"type", "StaticMesh"},
+        {"source", pathToUtf8(assetJson.filename())},
+    };
+    if (!writeJsonFile(assetJson, asset) || !writeJsonFile(meta, metadata)) {
+        logImportFailure(result, "Could not write imported glTF metadata.", log);
+        return result;
+    }
+
+    result.success = true;
+    result.asset = AssetData{guid, name, "StaticMesh", assetJson};
+    result.copiedSource = copiedSource;
+    result.metadata = meta;
+    return result;
+}
+
+AssetImportResult AssetImporter::importTexture(
+    const std::filesystem::path& source,
+    const std::filesystem::path& contentRoot,
+    OutputLog* log
+) {
+    AssetImportResult result;
+    if (!std::filesystem::exists(source)) {
+        logImportFailure(result, "Texture import source does not exist.", log);
+        return result;
+    }
+
+    const std::string extension = extensionLower(source);
+    if (extension != ".png" && extension != ".jpg" &&
+        extension != ".jpeg" && extension != ".bmp" &&
+        extension != ".tga") {
+        logImportFailure(result, "Texture import requires an image file.", log);
+        return result;
+    }
+
+    const std::filesystem::path directory =
+        contentRoot / "Imported" / "Textures";
+    std::filesystem::create_directories(directory);
+    const std::filesystem::path textureJson = uniqueAssetPath(
+        directory,
+        source.stem().wstring() + L".texture.json"
+    );
+    const std::filesystem::path copiedSource = uniqueAssetPath(
+        directory,
+        source.filename()
+    );
+
+    std::error_code copyError;
+    std::filesystem::copy_file(
+        source,
+        copiedSource,
+        std::filesystem::copy_options::overwrite_existing,
+        copyError
+    );
+    if (copyError) {
+        logImportFailure(result, "Could not copy texture source file.", log);
+        return result;
+    }
+
+    std::filesystem::path meta = textureJson;
+    meta += L".meta";
+    const Guid guid = guidFromExistingMeta(meta);
+    const std::string name = pathToUtf8(source.stem());
+    const Json asset{
+        {"type", "Texture"},
+        {"source", pathToUtf8(copiedSource.filename())},
+        {"sourceFormat", extension.substr(1)},
+    };
+    const Json metadata{
+        {"guid", guid.toString()},
+        {"name", name},
+        {"type", "Texture"},
+        {"source", pathToUtf8(textureJson.filename())},
+    };
+    if (!writeJsonFile(textureJson, asset) || !writeJsonFile(meta, metadata)) {
+        logImportFailure(result, "Could not write imported texture metadata.", log);
+        return result;
+    }
+
+    result.success = true;
+    result.asset = AssetData{guid, name, "Texture", textureJson};
+    result.copiedSource = copiedSource;
+    result.metadata = meta;
+    return result;
 }
 
 void AssetRegistry::scan(
@@ -502,7 +973,10 @@ void AssetRegistry::scan(
             stream >> meta;
             AssetData asset;
             asset.guid = parseGuid(meta.at("guid"));
-            asset.name = meta.value("name", entry.path().stem().string());
+            asset.name = meta.value(
+                "name",
+                pathToUtf8(entry.path().stem())
+            );
             asset.type = meta.value("type", "Unknown");
             asset.source = entry.path().parent_path() /
                            meta.value("source", std::string{});
@@ -510,7 +984,7 @@ void AssetRegistry::scan(
         } catch (const std::exception& exception) {
             if (log != nullptr) {
                 log->write(
-                    "Could not read " + entry.path().string() + ": " +
+                    "Could not read " + pathToUtf8(entry.path()) + ": " +
                     exception.what()
                 );
             }
@@ -529,6 +1003,108 @@ const AssetData* AssetRegistry::find(Guid guid) const {
         [guid](const AssetData& asset) { return asset.guid == guid; }
     );
     return found == assets_.end() ? nullptr : &*found;
+}
+
+const AssetData* AssetRegistry::findByName(std::string_view name) const {
+    const auto found = std::find_if(
+        assets_.begin(),
+        assets_.end(),
+        [name](const AssetData& asset) { return asset.name == name; }
+    );
+    return found == assets_.end() ? nullptr : &*found;
+}
+
+std::vector<const AssetData*> AssetRegistry::findByType(
+    std::string_view type
+) const {
+    std::vector<const AssetData*> result;
+    for (const AssetData& asset : assets_) {
+        if (asset.type == type) {
+            result.push_back(&asset);
+        }
+    }
+    return result;
+}
+
+std::optional<StaticMeshAsset> AssetRegistry::loadStaticMesh(
+    Guid guid,
+    OutputLog* log
+) const {
+    const AssetData* asset = find(guid);
+    if (asset == nullptr || asset->type != "StaticMesh") {
+        if (log != nullptr) {
+            log->write("StaticMesh asset GUID was not found.");
+        }
+        return std::nullopt;
+    }
+
+    const std::optional<Json> json = readJsonFile(asset->source, log);
+    if (!json.has_value()) {
+        return std::nullopt;
+    }
+    return StaticMeshAsset{
+        asset->guid,
+        meshPrimitiveFromText(json->value("primitive", "Cube")),
+    };
+}
+
+std::optional<MaterialAsset> AssetRegistry::loadMaterial(
+    Guid guid,
+    OutputLog* log
+) const {
+    const AssetData* asset = find(guid);
+    if (asset == nullptr || asset->type != "Material") {
+        if (log != nullptr) {
+            log->write("Material asset GUID was not found.");
+        }
+        return std::nullopt;
+    }
+
+    const std::optional<Json> json = readJsonFile(asset->source, log);
+    if (!json.has_value()) {
+        return std::nullopt;
+    }
+
+    MaterialInstance material;
+    material.baseColor = jsonVectorOr(
+        *json,
+        "baseColor",
+        material.baseColor
+    );
+    material.roughness = json->value("roughness", material.roughness);
+    material.metallic = json->value("metallic", material.metallic);
+    return MaterialAsset{asset->guid, material};
+}
+
+std::optional<TextureAsset> AssetRegistry::loadTexture(
+    Guid guid,
+    OutputLog* log
+) const {
+    const AssetData* asset = find(guid);
+    if (asset == nullptr || asset->type != "Texture") {
+        if (log != nullptr) {
+            log->write("Texture asset GUID was not found.");
+        }
+        return std::nullopt;
+    }
+
+    const std::optional<Json> json = readJsonFile(asset->source, log);
+    if (!json.has_value()) {
+        return std::nullopt;
+    }
+
+    const std::string source = json->value("source", std::string{});
+    if (source.empty()) {
+        if (log != nullptr) {
+            log->write("Texture asset has no source image.");
+        }
+        return std::nullopt;
+    }
+    return TextureAsset{
+        asset->guid,
+        asset->source.parent_path() / source,
+        json->value("sourceFormat", std::string{}),
+    };
 }
 
 std::string WorldSerializer::toJson(const World& world) {
@@ -700,18 +1276,167 @@ std::unique_ptr<World> WorldSerializer::load(
     return fromJson(contents.str(), log);
 }
 
+bool WorldSerializer::restore(
+    World& world,
+    std::string_view text,
+    OutputLog* log
+) {
+    std::unique_ptr<World> loaded;
+    try {
+        loaded = fromJson(text, log);
+    } catch (const std::exception& exception) {
+        if (log != nullptr) {
+            log->write(
+                "Could not restore World snapshot: " +
+                std::string{exception.what()}
+            );
+        }
+        return false;
+    }
+    if (loaded == nullptr) {
+        return false;
+    }
+
+    InputSystem* input = world.inputSystem_;
+    world.clearForLoad();
+    world.setGuid(loaded->guid());
+    world.setName(loaded->name());
+    world.actors_ = std::move(loaded->actors_);
+    world.pendingSpawns_.clear();
+    world.collisionWorld_ = std::move(loaded->collisionWorld_);
+    world.renderScene_ = std::move(loaded->renderScene_);
+    world.inputSystem_ = input;
+    world.beganPlay_ = false;
+    world.ticking_ = false;
+
+    for (const auto& actor : world.actors_) {
+        actor->world_ = &world;
+        actor->setOuter(&world);
+    }
+    return true;
+}
+
+Actor* WorldSerializer::duplicateActor(
+    World& world,
+    const Actor& source,
+    std::string name,
+    OutputLog* log
+) {
+    Json root = Json::parse(toJson(world));
+    const Json* sourceJson = nullptr;
+    for (const Json& actorJson : root.at("actors")) {
+        if (parseGuid(actorJson.at("guid")) == source.guid()) {
+            sourceJson = &actorJson;
+            break;
+        }
+    }
+    if (sourceJson == nullptr) {
+        return nullptr;
+    }
+
+    Json clone = *sourceJson;
+    clone["name"] = std::move(name);
+    std::unordered_map<std::string, std::string> remappedGuids;
+    const std::string oldActorGuid = clone.at("guid").get<std::string>();
+    const std::string newActorGuid = Guid::create().toString();
+    remappedGuids.emplace(oldActorGuid, newActorGuid);
+    clone["guid"] = newActorGuid;
+
+    for (Json& component : clone.at("components")) {
+        const std::string oldGuid = component.at("guid").get<std::string>();
+        const std::string newGuid = Guid::create().toString();
+        remappedGuids.emplace(oldGuid, newGuid);
+        component["guid"] = newGuid;
+    }
+    const auto remap = [&remappedGuids](Json& value) {
+        if (!value.is_string()) {
+            return;
+        }
+        const auto found = remappedGuids.find(value.get<std::string>());
+        if (found != remappedGuids.end()) {
+            value = found->second;
+        }
+    };
+    remap(clone["root"]);
+    for (Json& component : clone.at("components")) {
+        remap(component["parent"]);
+    }
+
+    Json temporaryRoot{
+        {"version", 1},
+        {"type", "World"},
+        {"guid", Guid::create().toString()},
+        {"name", "DuplicateActorTemporaryWorld"},
+        {"actors", Json::array({clone})},
+    };
+    auto temporary = fromJson(temporaryRoot.dump(), log);
+    if (temporary == nullptr || temporary->actors_.empty()) {
+        return nullptr;
+    }
+
+    std::unique_ptr<Actor> duplicate = std::move(temporary->actors_.front());
+    temporary->actors_.clear();
+    // 임시 World의 등록 상태를 새 World로 가져가면 onRegister가 생략된다.
+    duplicate->unregisterComponents();
+    duplicate->world_ = &world;
+    duplicate->setOuter(&world);
+    Actor* result = world.adoptActor(std::move(duplicate), false);
+    applyProperties(
+        *result,
+        clone.value("properties", Json::object()),
+        log
+    );
+    return result;
+}
+
 void TransactionStack::record(
     Guid object,
     std::string property,
     PropertyValue before,
     PropertyValue after
 ) {
-    undo_.push_back({
+    recordGroup({{
         object,
         std::move(property),
         std::move(before),
         std::move(after),
+    }});
+}
+
+void TransactionStack::recordGroup(std::vector<PropertyChange> changes) {
+    if (changes.empty()) {
+        return;
+    }
+    undo_.push_back({std::move(changes), {}, {}});
+    redo_.clear();
+}
+
+void TransactionStack::recordTransform(
+    Guid object,
+    const Transform& before,
+    const Transform& after
+) {
+    constexpr float epsilon = 0.0001F;
+    if (glm::length(before.location - after.location) < epsilon &&
+        glm::length(before.rotationDegrees - after.rotationDegrees) < epsilon &&
+        glm::length(before.scale - after.scale) < epsilon) {
+        return;
+    }
+    recordGroup({
+        {object, "Location", before.location, after.location},
+        {object, "Rotation", before.rotationDegrees, after.rotationDegrees},
+        {object, "Scale", before.scale, after.scale},
     });
+}
+
+void TransactionStack::recordSnapshot(
+    std::string before,
+    std::string after
+) {
+    if (before == after) {
+        return;
+    }
+    undo_.push_back({{}, std::move(before), std::move(after)});
     redo_.clear();
 }
 
@@ -722,6 +1447,7 @@ bool TransactionStack::undo(World& world) {
     Transaction transaction = std::move(undo_.back());
     undo_.pop_back();
     if (!apply(world, transaction, false)) {
+        undo_.push_back(std::move(transaction));
         return false;
     }
     redo_.push_back(std::move(transaction));
@@ -735,6 +1461,7 @@ bool TransactionStack::redo(World& world) {
     Transaction transaction = std::move(redo_.back());
     redo_.pop_back();
     if (!apply(world, transaction, true)) {
+        redo_.push_back(std::move(transaction));
         return false;
     }
     undo_.push_back(std::move(transaction));
@@ -751,21 +1478,36 @@ bool TransactionStack::apply(
     const Transaction& transaction,
     bool useAfter
 ) {
-    Object* object = world.findObject(transaction.object);
-    if (object == nullptr || object->typeDescriptor() == nullptr) {
-        return false;
+    if (!transaction.beforeSnapshot.empty() ||
+        !transaction.afterSnapshot.empty()) {
+        return WorldSerializer::restore(
+            world,
+            useAfter ? transaction.afterSnapshot : transaction.beforeSnapshot
+        );
     }
 
-    for (const PropertyDescriptor* property :
-         object->typeDescriptor()->allProperties()) {
-        if (property->name == transaction.property && property->setter) {
-            return property->setter(
-                *object,
-                useAfter ? transaction.after : transaction.before
-            );
+    bool applied = true;
+    for (const PropertyChange& change : transaction.changes) {
+        Object* object = world.findObject(change.object);
+        if (object == nullptr || object->typeDescriptor() == nullptr) {
+            applied = false;
+            continue;
         }
+
+        bool found = false;
+        for (const PropertyDescriptor* property :
+             object->typeDescriptor()->allProperties()) {
+            if (property->name == change.property && property->setter) {
+                found = property->setter(
+                    *object,
+                    useAfter ? change.after : change.before
+                );
+                break;
+            }
+        }
+        applied = applied && found;
     }
-    return false;
+    return applied;
 }
 
 } // namespace engine

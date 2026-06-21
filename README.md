@@ -12,8 +12,12 @@ Unreal Engine의 규모를 복제하기보다 `World -> Actor -> Component` 구�
 1. [처음 읽는 안내서](docs/00_START_HERE.md)
 2. [빌드와 실행](docs/01_BUILD_AND_RUN.md)
 3. [코드 읽기 순서](docs/02_CODE_READING_ORDER.md)
-4. [전체 구조](docs/ARCHITECTURE.md)
-5. [용어집](docs/GLOSSARY.md)
+4. [3D 에디터 첫 실습](docs/03_EDITOR_QUICKSTART.md)
+5. [전체 구조](docs/ARCHITECTURE.md)
+6. [AI 시각 테스트](docs/AI_VISUAL_TESTING.md)
+7. [용어집](docs/GLOSSARY.md)
+8. [AI 에이전트 제작 가이드](docs/AI_AGENT_AUTHORING.md)
+9. [이동식 배포 패키지 만들기](docs/04_DISTRIBUTABLE_PACKAGE.md)
 
 Visual Studio의 **Developer PowerShell for VS**에서 빠른 빌드:
 
@@ -26,12 +30,32 @@ ctest --preset windows-debug
 
 ## 현재 보이는 것
 
-- 편집 가능한 3D 뷰포트, 바닥 격자와 큐브
+- Unreal 방식 카메라와 선택 가능한 off-screen 3D Viewport
+- 이동·회전·크기 기즈모, snapping, 생성·복제·삭제, Undo/Redo
+- 자유롭게 이동하고 저장되는 ImGui 도킹 패널
+- `F9` 또는 CLI로 editor/viewport PNG와 JSON metadata 캡처
 - `W/A/S/D`로 움직이는 `Character`
+- `HealthComponent`, `ProjectileComponent`, `CombatComponent` 기반 단순 전투 도구
+- `SkeletalAnimationComponent` 기반 SceneComponent bone keyframe animation
+- `RigidBodyComponent` 기반 중력, velocity, AABB 차단 테스트용 Physics Crate
 - AABB 충돌, raycast, sweep, overlap 이벤트
 - World Outliner, Details, Content Browser, Output Log
 - `F5`로 편집 World를 보존하는 Play In Editor 시작과 종료
 - reflection 기반 프로퍼티 편집과 JSON World 저장/로드
+- stdio MCP, 원자적 `.cocoa.json` World 편집, C ABI GameModule SDK
+
+## 에디터 조작
+
+| 입력 | 동작 |
+| --- | --- |
+| `RMB + W/A/S/D/Q/E` | 에디터 카메라 이동 |
+| `RMB` 드래그 | 시점 회전 |
+| `Alt + LMB` / `MMB` / 휠 | orbit / pan / dolly |
+| `LMB` | 물체 선택 |
+| `F` | 선택 물체 포커스 |
+| `W/E/R` | 이동/회전/크기 기즈모 |
+| `Ctrl+D` / `Delete` | 복제 / 삭제 |
+| `F5` / `F9` | PIE 전환 / 스크린샷 |
 
 ## 프로젝트 지도
 

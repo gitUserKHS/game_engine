@@ -13,6 +13,7 @@ enum class MeshPrimitive {
 
 struct MaterialInstance {
     glm::vec3 baseColor{1.0F};
+    Guid baseColorTexture;
     float roughness{0.7F};
     float metallic{0.0F};
 };

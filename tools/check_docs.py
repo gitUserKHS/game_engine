@@ -29,6 +29,8 @@ REQUIRED_DOCUMENTS = {
     "docs/00_START_HERE.md",
     "docs/01_BUILD_AND_RUN.md",
     "docs/02_CODE_READING_ORDER.md",
+    "docs/03_EDITOR_QUICKSTART.md",
+    "docs/AI_VISUAL_TESTING.md",
     "docs/ARCHITECTURE.md",
     "docs/GLOSSARY.md",
     "docs/DEVELOPMENT.md",
