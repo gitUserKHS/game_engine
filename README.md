@@ -16,6 +16,7 @@ Unreal Engine의 규모를 복제하기보다 `World -> Actor -> Component` 구�
 5. [전체 구조](docs/ARCHITECTURE.md)
 6. [AI 시각 테스트](docs/AI_VISUAL_TESTING.md)
 7. [용어집](docs/GLOSSARY.md)
+8. [AI 에이전트 제작 가이드](docs/AI_AGENT_AUTHORING.md)
 
 Visual Studio의 **Developer PowerShell for VS**에서 빠른 빌드:
 
@@ -40,6 +41,7 @@ ctest --preset windows-debug
 - World Outliner, Details, Content Browser, Output Log
 - `F5`로 편집 World를 보존하는 Play In Editor 시작과 종료
 - reflection 기반 프로퍼티 편집과 JSON World 저장/로드
+- stdio MCP, 원자적 `.cocoa.json` World 편집, C ABI GameModule SDK
 
 ## 에디터 조작
 

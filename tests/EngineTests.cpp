@@ -1,5 +1,8 @@
 #include "engine/Gameplay.hpp"
 #include "engine/Editor.hpp"
+#include "engine/Authoring.hpp"
+#include "engine/GameModule.hpp"
+#include "engine/McpServer.hpp"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
@@ -1005,6 +1008,167 @@ void testAssetImporterCreatesMetaFiles() {
     std::filesystem::remove_all(external);
 }
 
+engine::ProjectManifest temporaryProject(std::string_view name) {
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path() / std::string{name};
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root / "Content" / "Worlds");
+    engine::ProjectManifest manifest;
+    manifest.schemaVersion = 1;
+    manifest.projectGuid = engine::Guid::create();
+    manifest.name = std::string{name};
+    manifest.file = root / "CocoaProject.json";
+    manifest.root = root;
+    manifest.contentRoot = root / "Content";
+    manifest.defaultWorld = root / "Content" / "Worlds" / "Test.world.json";
+    manifest.gameSourceRoot = root / "Game" / "Source";
+    manifest.gameModuleTarget = "sample_game_module";
+    manifest.configurePreset = "windows-debug";
+    manifest.buildPreset = "windows-debug";
+    manifest.testPreset = "windows-debug";
+    manifest.allowedWriteRoots = {root / "Content", root / "Game", root / "Saved"};
+    return manifest;
+}
+
+nlohmann::json authoringScript() {
+    return {
+        {"schemaVersion", 1},
+        {"transaction", "Create agent cube"},
+        {"commands", nlohmann::json::array({
+            {{"op", "spawn_actor"}, {"type", "Actor"}, {"name", "AgentCube"}, {"alias", "cube"}},
+            {{"op", "add_component"}, {"actor", "cube"}, {"type", "BoxComponent"}, {"name", "Root"}, {"alias", "root"}},
+            {{"op", "set_property"}, {"target", "root"}, {"property", "Location"}, {"value", {100.0F, 25.0F, 50.0F}}},
+            {{"op", "set_root"}, {"actor", "cube"}, {"component", "root"}}
+        })}
+    };
+}
+
+void testAuthoringCommandsAreAtomicAndRevisioned() {
+    engine::ProjectManifest manifest = temporaryProject("cocoa-authoring-test");
+    const std::filesystem::path root = manifest.root;
+    engine::AuthoringSession session(manifest);
+    const std::string initialRevision = session.revision();
+
+    const engine::CommandResult preview = session.preview(authoringScript());
+    require(preview.success && preview.preview, "Authoring preview failed.");
+    require(
+        session.world().actors().empty() && session.revision() == initialRevision,
+        "Authoring preview mutated the real World."
+    );
+
+    const engine::CommandResult applied = session.apply(authoringScript());
+    require(applied.success, "Authoring command script did not apply.");
+    require(session.world().actors().size() == 1, "Authoring did not spawn an Actor.");
+    auto* rootComponent = session.world().actors().front()->rootComponent();
+    require(
+        rootComponent != nullptr &&
+            near(rootComponent->relativeTransform().location, {100.0F, 25.0F, 50.0F}),
+        "Authoring aliases or reflected property writes failed."
+    );
+
+    nlohmann::json invalid = authoringScript();
+    invalid["commands"].push_back({{"op", "not_a_command"}});
+    const std::string beforeFailure = session.revision();
+    const std::size_t actorsBeforeFailure = session.world().actors().size();
+    const engine::CommandResult rejected = session.apply(invalid);
+    require(!rejected.success, "Invalid authoring command was accepted.");
+    require(
+        session.revision() == beforeFailure &&
+            session.world().actors().size() == actorsBeforeFailure,
+        "Failed authoring transaction was not rolled back."
+    );
+
+    nlohmann::json stale = authoringScript();
+    stale["baseWorldRevision"] = "stale";
+    require(!session.apply(stale).success, "Stale World revision was accepted.");
+    require(
+        manifest.canWrite(manifest.defaultWorld) &&
+            !manifest.canWrite(root.parent_path() / "outside.txt"),
+        "Project write-root validation failed."
+    );
+    std::filesystem::remove_all(root);
+}
+
+void testMcpProtocolAndApprovalScopes() {
+    auto readOnlySession = std::make_unique<engine::AuthoringSession>(
+        temporaryProject("cocoa-mcp-readonly-test")
+    );
+    const std::filesystem::path readOnlyRoot = readOnlySession->project().root;
+    engine::McpServer readOnly(std::move(readOnlySession));
+    const auto initialized = readOnly.handle({
+        {"jsonrpc", "2.0"}, {"id", 1}, {"method", "initialize"},
+        {"params", {{"protocolVersion", "2025-11-25"}}}
+    });
+    require(
+        initialized.has_value() &&
+            initialized->at("result").at("protocolVersion") == "2025-11-25",
+        "MCP initialize response was invalid."
+    );
+    const auto tools = readOnly.handle({
+        {"jsonrpc", "2.0"}, {"id", 2}, {"method", "tools/list"}
+    });
+    require(
+        tools.has_value() && tools->at("result").at("tools").size() >= 10,
+        "MCP tool discovery did not expose authoring tools."
+    );
+    const auto denied = readOnly.handle({
+        {"jsonrpc", "2.0"}, {"id", 3}, {"method", "tools/call"},
+        {"params", {{"name", "world.apply_commands"},
+                    {"arguments", {{"script", authoringScript()}}}}}
+    });
+    require(
+        denied.has_value() && denied->at("result").value("isError", false),
+        "MCP write tool ignored approval scopes."
+    );
+
+    auto writableSession = std::make_unique<engine::AuthoringSession>(
+        temporaryProject("cocoa-mcp-write-test")
+    );
+    const std::filesystem::path writableRoot = writableSession->project().root;
+    engine::McpServer writable(
+        std::move(writableSession),
+        {engine::ApprovalScope::WorldWrite}
+    );
+    const auto accepted = writable.handle({
+        {"jsonrpc", "2.0"}, {"id", 4}, {"method", "tools/call"},
+        {"params", {{"name", "world.apply_commands"},
+                    {"arguments", {{"script", authoringScript()}}}}}
+    });
+    require(
+        accepted.has_value() && !accepted->at("result").value("isError", true),
+        "Approved MCP World command failed."
+    );
+    std::filesystem::remove_all(readOnlyRoot);
+    std::filesystem::remove_all(writableRoot);
+}
+
+void testGameModuleAbiLoadsSampleDll() {
+    engine::registerEngineTypes();
+    engine::World world;
+    engine::InputSystem input;
+    engine::OutputLog log;
+    engine::GameModuleHost host;
+    std::string error;
+    const std::filesystem::path modulePath =
+        std::filesystem::current_path() / L"sample_game_module.dll";
+    require(
+        host.load(modulePath, &world, &input, &log, &error),
+        "Sample GameModule DLL did not load."
+    );
+    require(
+        host.loaded() && host.moduleName() == "SampleGameModule",
+        "Loaded GameModule API table was invalid."
+    );
+    host.tick(0.25F);
+    host.unload();
+    require(
+        log.messages().size() >= 2 &&
+            log.messages().front() == "Sample GameModule loaded." &&
+            log.messages().back() == "Sample GameModule unloaded.",
+        "GameModule lifecycle callbacks were not invoked."
+    );
+}
+
 } // namespace
 
 int main() {
@@ -1034,6 +1198,9 @@ int main() {
         testPngWriter();
         testAssetRegistryLoadsGuidAssets();
         testAssetImporterCreatesMetaFiles();
+        testAuthoringCommandsAreAtomicAndRevisioned();
+        testMcpProtocolAndApprovalScopes();
+        testGameModuleAbiLoadsSampleDll();
         std::cout << "All engine tests passed.\n";
         return 0;
     } catch (const std::exception& exception) {

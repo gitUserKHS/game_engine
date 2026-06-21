@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cocoa.engine/schemas/command-v1.json",
+  "title": "Cocoa Authoring Command Script",
+  "type": "object",
+  "required": ["schemaVersion", "commands"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "transaction": {"type": "string"},
+    "baseWorldRevision": {"type": "string"},
+    "commands": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["op"],
+        "properties": {
+          "op": {
+            "enum": [
+              "spawn_actor", "add_component", "set_property", "set_root",
+              "attach", "possess", "duplicate_actor", "destroy_actor",
+              "import_asset", "save_world"
+            ]
+          },
+          "type": {"type": "string"},
+          "name": {"type": "string"},
+          "alias": {"type": "string"},
+          "target": {"type": "string"},
+          "actor": {"type": "string"},
+          "component": {"type": "string"},
+          "child": {"type": "string"},
+          "parent": {"type": "string"},
+          "controller": {"type": "string"},
+          "pawn": {"type": "string"},
+          "property": {"type": "string"},
+          "value": {},
+          "source": {"type": "string"},
+          "kind": {"enum": ["gltf", "texture"]},
+          "path": {"type": "string"}
+        }
+      }
+    }
+  }
+}

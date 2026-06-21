@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "transaction": "Create block world prototype",
+  "commands": [
+    {"op": "spawn_actor", "type": "Actor", "name": "Ground Block", "alias": "ground"},
+    {"op": "add_component", "actor": "ground", "type": "BoxComponent", "name": "Root", "alias": "groundRoot"},
+    {"op": "set_property", "target": "groundRoot", "property": "Location", "value": [0, 0, -50]},
+    {"op": "set_property", "target": "groundRoot", "property": "Extent", "value": [800, 800, 50]},
+    {"op": "set_root", "actor": "ground", "component": "groundRoot"},
+    {"op": "add_component", "actor": "ground", "type": "StaticMeshComponent", "name": "Mesh", "alias": "groundMesh"},
+    {"op": "set_property", "target": "groundMesh", "property": "Scale", "value": [1600, 1600, 100]},
+    {"op": "attach", "child": "groundMesh", "parent": "groundRoot"},
+    {"op": "save_world"}
+  ]
+}

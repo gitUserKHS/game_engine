@@ -54,5 +54,14 @@
 - [ ] 저장 가능한 World와 asset
 - [ ] 별도 게임 실행 패키징
 
+## v1.1 AI Authoring
+
+- [x] Project manifest와 원자적 command script
+- [x] stdio MCP schema, World, asset, build, test, capture 도구
+- [x] 승인 scope와 허용 쓰기 경로
+- [x] C ABI GameModule SDK와 샘플 DLL
+- [ ] 실행 중 에디터 named-pipe 명령과 승인 UI
+- [ ] voxel/world-partition capability pack
+
 멀티스레드 렌더링, garbage collector, network replication, Nanite, Lumen,
 전체 RHI 추상화는 v1.0 범위에 포함하지 않는다.

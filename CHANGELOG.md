@@ -7,6 +7,12 @@
 
 ### Added
 
+- `CocoaProject.json` 기반 AI 프로젝트 manifest와 쓰기 경로 정책
+- 원자적 `.cocoa.json` 명령을 처리하는 `AuthoringSession`
+- MCP `2025-11-25` stdio 서버와 reflection/World/build/capture 도구
+- C ABI `cocoa_game_sdk`와 `sample_game_module` DLL target
+- 블록 월드·오픈월드 액션 AI authoring 예제와 한국어 가이드
+
 - Texture asset GUID metadata load와 요청 시 OpenGL texture cache 생성 API
 - StaticMesh asset을 GUID 기준 `MeshGpuResource`로 캐시하는 Renderer API
 - Content Browser의 외부 glTF/texture 경로 입력 import와 Content rescan 버튼

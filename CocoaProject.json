@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "projectGuid": "8b9cc8b1929547fba034fb86b82df6e1",
+  "name": "CocoaLearningEngine",
+  "contentRoot": "Content",
+  "defaultWorld": "Content/Worlds/AgentDemo.world.json",
+  "gameSourceRoot": "Game/Source",
+  "gameModuleTarget": "sample_game_module",
+  "configurePreset": "windows-debug",
+  "buildPreset": "windows-debug",
+  "testPreset": "windows-debug",
+  "allowedWriteRoots": [
+    "Content",
+    "Game",
+    "Saved"
+  ]
+}
