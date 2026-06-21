@@ -449,6 +449,75 @@ void testBlueprintLiteEventsAndSerialization() {
     );
 }
 
+void testSkeletalAnimationAppliesBonePose() {
+    engine::registerEngineTypes();
+    engine::World world;
+    auto& actor = world.spawnActor<engine::Actor>("AnimatedActor");
+    auto& root = actor.addComponent<engine::SceneComponent>("Root");
+    actor.setRootComponent(&root);
+    auto& arm = actor.addComponent<engine::SceneComponent>("Arm");
+    require(arm.attachTo(&root), "Animation bone attachment failed.");
+    auto& animation =
+        actor.addComponent<engine::SkeletalAnimationComponent>("Animation");
+    animation.setClipJson(R"({
+  "length": 1.0,
+  "loop": false,
+  "tracks": [
+    {
+      "bone": "Arm",
+      "keys": [
+        {"time": 0.0, "location": [0.0, 0.0, 0.0], "rotation": [0.0, 0.0, 0.0]},
+        {"time": 1.0, "location": [0.0, 0.0, 100.0], "rotation": [0.0, 0.0, 90.0]}
+      ]
+    }
+  ]
+})");
+
+    require(near(animation.length(), 1.0F), "Animation length was not parsed.");
+    require(
+        animation.applyPose(0.5F) == 1,
+        "Skeletal animation did not apply to the named bone."
+    );
+    require(
+        near(arm.relativeTransform().location.z, 50.0F) &&
+            near(arm.relativeTransform().rotationDegrees.z, 45.0F),
+        "Skeletal animation did not interpolate the bone transform."
+    );
+
+    const std::string saved = engine::WorldSerializer::toJson(world);
+    auto loaded = engine::WorldSerializer::fromJson(saved);
+    require(loaded != nullptr, "Animated World JSON did not reload.");
+    auto* loadedActor = loaded->findActor(actor.guid());
+    require(loadedActor != nullptr, "Animated Actor was not restored.");
+    auto* loadedAnimation =
+        loadedActor->findComponent<engine::SkeletalAnimationComponent>();
+    require(
+        loadedAnimation != nullptr && near(loadedAnimation->length(), 1.0F),
+        "Skeletal animation clip was not restored."
+    );
+}
+
+void testCharacterCreatesAnimatedBodyBone() {
+    engine::World world;
+    auto& character = world.spawnActor<engine::Character>("AnimatedHero");
+    engine::SceneComponent* bodyBone = nullptr;
+    for (const auto& component : character.components()) {
+        if (component->name() == "BodyBone") {
+            bodyBone = dynamic_cast<engine::SceneComponent*>(component.get());
+        }
+    }
+    auto* animation =
+        character.findComponent<engine::SkeletalAnimationComponent>();
+    require(bodyBone != nullptr, "Character did not create BodyBone.");
+    require(animation != nullptr, "Character did not create animation component.");
+    world.beginPlay();
+    world.tick(0.25F);
+    require(
+        animation->appliedPoseCount() > 0,
+        "Character animation did not apply any bone pose."
+    );
+}
+
 void testEditorViewportMath() {
     engine::EditorViewportController camera;
     const glm::vec3 originalPosition = camera.position();
@@ -881,6 +950,8 @@ int main() {
         testSpringArmCameraCollisionPullsCameraIn();
         testCombatProjectileDamagesHealth();
         testBlueprintLiteEventsAndSerialization();
+        testSkeletalAnimationAppliesBonePose();
+        testCharacterCreatesAnimatedBodyBone();
         testEditorViewportMath();
         testRenderProxyPicking();
         testWorldRestoreAndSnapshotTransactions();

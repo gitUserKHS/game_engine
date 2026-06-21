@@ -141,6 +141,48 @@ private:
     float projectileLifetime_{3.0F};
 };
 
+/// SceneComponent를 bone처럼 보고 JSON keyframe clip으로 움직이는 교육용 skeletal animation이다.
+class SkeletalAnimationComponent : public ActorComponent {
+public:
+    SkeletalAnimationComponent(std::string name, Actor* owner);
+
+    [[nodiscard]] std::string_view typeName() const override;
+    void tickComponent(float deltaTime) override;
+
+    [[nodiscard]] const std::string& clipJson() const;
+    void setClipJson(std::string clip);
+    [[nodiscard]] bool playing() const;
+    void setPlaying(bool playing);
+    [[nodiscard]] float playbackTime() const;
+    void setPlaybackTime(float seconds);
+    [[nodiscard]] float length() const;
+    [[nodiscard]] int appliedPoseCount() const;
+    [[nodiscard]] int applyPose(float seconds);
+
+private:
+    struct Keyframe {
+        float time{0.0F};
+        Transform transform;
+    };
+
+    struct Track {
+        std::string bone;
+        std::vector<Keyframe> keys;
+    };
+
+    [[nodiscard]] SceneComponent* findBone(std::string_view boneName) const;
+    [[nodiscard]] Transform sampleTrack(const Track& track, float seconds) const;
+    void rebuildClip();
+
+    std::string clipJson_;
+    std::vector<Track> tracks_;
+    float length_{0.0F};
+    float playbackTime_{0.0F};
+    int appliedPoseCount_{0};
+    bool playing_{true};
+    bool loop_{true};
+};
+
 /// 작은 Blueprint 학습용 컴포넌트다. JSON 이벤트 그래프를 읽어 reflection property를 조작한다.
 class BlueprintComponent : public ActorComponent {
 public:

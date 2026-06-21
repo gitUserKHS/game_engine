@@ -34,6 +34,7 @@ ctest --preset windows-debug
 - `F9` 또는 CLI로 editor/viewport PNG와 JSON metadata 캡처
 - `W/A/S/D`로 움직이는 `Character`
 - `HealthComponent`, `ProjectileComponent`, `CombatComponent` 기반 단순 전투 도구
+- `SkeletalAnimationComponent` 기반 SceneComponent bone keyframe animation
 - AABB 충돌, raycast, sweep, overlap 이벤트
 - World Outliner, Details, Content Browser, Output Log
 - `F5`로 편집 World를 보존하는 Play In Editor 시작과 종료

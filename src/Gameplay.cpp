@@ -5,6 +5,7 @@
 #include <glm/geometric.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <stdexcept>
 
 namespace {
@@ -55,6 +56,31 @@ const engine::PropertyDescriptor* findProperty(
     return nullptr;
 }
 
+glm::vec3 vectorFromJsonOr(
+    const Json& json,
+    std::string_view key,
+    const glm::vec3& fallback
+) {
+    const auto found = json.find(std::string{key});
+    if (found == json.end() || !found->is_array() || found->size() != 3) {
+        return fallback;
+    }
+    return {
+        found->at(0).get<float>(),
+        found->at(1).get<float>(),
+        found->at(2).get<float>(),
+    };
+}
+
+engine::Transform transformFromKeyJson(const Json& json) {
+    engine::Transform transform;
+    transform.location = vectorFromJsonOr(json, "location", transform.location);
+    transform.rotationDegrees =
+        vectorFromJsonOr(json, "rotation", transform.rotationDegrees);
+    transform.scale = vectorFromJsonOr(json, "scale", transform.scale);
+    return transform;
+}
+
 } // namespace
 
 namespace engine {
@@ -86,8 +112,11 @@ void Character::onConstruction() {
     collision_->setRelativeLocation({0.0F, 0.0F, 45.0F});
     setRootComponent(collision_);
 
+    auto& bodyBone = addComponent<SceneComponent>("BodyBone");
+    bodyBone.attachTo(collision_);
+
     auto& mesh = addComponent<StaticMeshComponent>("PlayerMesh");
-    mesh.attachTo(collision_);
+    mesh.attachTo(&bodyBone);
     Transform meshTransform;
     meshTransform.scale = {90.0F, 90.0F, 90.0F};
     mesh.setRelativeTransform(meshTransform);
@@ -105,6 +134,22 @@ void Character::onConstruction() {
     cameraTransform.location = {-850.0F, 0.0F, 950.0F};
     cameraTransform.rotationDegrees = {0.0F, 42.0F, 0.0F};
     camera.setRelativeTransform(cameraTransform);
+
+    auto& animation = addComponent<SkeletalAnimationComponent>("Animation");
+    animation.setClipJson(R"({
+  "length": 1.0,
+  "loop": true,
+  "tracks": [
+    {
+      "bone": "BodyBone",
+      "keys": [
+        {"time": 0.0, "rotation": [0.0, 0.0, -3.0]},
+        {"time": 0.5, "rotation": [0.0, 0.0, 3.0]},
+        {"time": 1.0, "rotation": [0.0, 0.0, -3.0]}
+      ]
+    }
+  ]
+})");
 }
 
 void Character::tick(float deltaTime) {
@@ -409,6 +454,182 @@ Actor* CombatComponent::fireProjectile(const glm::vec3& direction) {
     projectileComponent.setLifetime(projectileLifetime_);
     projectileComponent.setInstigator(source);
     return &projectile;
+}
+
+SkeletalAnimationComponent::SkeletalAnimationComponent(
+    std::string name,
+    Actor* owner
+)
+    : ActorComponent(std::move(name), owner) {
+    tickSettings().enabled = true;
+    tickSettings().group = TickGroup::PostUpdate;
+}
+
+std::string_view SkeletalAnimationComponent::typeName() const {
+    return "SkeletalAnimationComponent";
+}
+
+void SkeletalAnimationComponent::tickComponent(float deltaTime) {
+    if (!playing_ || tracks_.empty()) {
+        return;
+    }
+    playbackTime_ += std::max(deltaTime, 0.0F);
+    (void)applyPose(playbackTime_);
+}
+
+const std::string& SkeletalAnimationComponent::clipJson() const {
+    return clipJson_;
+}
+
+void SkeletalAnimationComponent::setClipJson(std::string clip) {
+    clipJson_ = std::move(clip);
+    rebuildClip();
+}
+
+bool SkeletalAnimationComponent::playing() const {
+    return playing_;
+}
+
+void SkeletalAnimationComponent::setPlaying(bool playing) {
+    playing_ = playing;
+}
+
+float SkeletalAnimationComponent::playbackTime() const {
+    return playbackTime_;
+}
+
+void SkeletalAnimationComponent::setPlaybackTime(float seconds) {
+    playbackTime_ = std::max(seconds, 0.0F);
+}
+
+float SkeletalAnimationComponent::length() const {
+    return length_;
+}
+
+int SkeletalAnimationComponent::appliedPoseCount() const {
+    return appliedPoseCount_;
+}
+
+int SkeletalAnimationComponent::applyPose(float seconds) {
+    if (tracks_.empty()) {
+        return 0;
+    }
+
+    float localTime = std::max(seconds, 0.0F);
+    if (length_ > 0.0001F) {
+        if (loop_) {
+            localTime = std::fmod(localTime, length_);
+        } else {
+            localTime = std::min(localTime, length_);
+        }
+    }
+
+    int applied = 0;
+    for (const Track& track : tracks_) {
+        SceneComponent* bone = findBone(track.bone);
+        if (bone == nullptr || track.keys.empty()) {
+            continue;
+        }
+        bone->setRelativeTransform(sampleTrack(track, localTime));
+        ++applied;
+    }
+    appliedPoseCount_ += applied;
+    return applied;
+}
+
+SceneComponent* SkeletalAnimationComponent::findBone(
+    std::string_view boneName
+) const {
+    Actor* actor = owner();
+    if (actor == nullptr) {
+        return nullptr;
+    }
+    for (const auto& component : actor->components()) {
+        auto* scene = dynamic_cast<SceneComponent*>(component.get());
+        if (scene != nullptr && scene->name() == boneName) {
+            return scene;
+        }
+    }
+    return nullptr;
+}
+
+Transform SkeletalAnimationComponent::sampleTrack(
+    const Track& track,
+    float seconds
+) const {
+    if (track.keys.size() == 1) {
+        return track.keys.front().transform;
+    }
+    if (seconds <= track.keys.front().time) {
+        return track.keys.front().transform;
+    }
+
+    for (std::size_t index = 1; index < track.keys.size(); ++index) {
+        const Keyframe& previous = track.keys[index - 1];
+        const Keyframe& next = track.keys[index];
+        if (seconds > next.time) {
+            continue;
+        }
+        const float duration = std::max(next.time - previous.time, 0.0001F);
+        const float alpha = std::clamp((seconds - previous.time) / duration, 0.0F, 1.0F);
+        Transform result;
+        result.location =
+            previous.transform.location +
+            (next.transform.location - previous.transform.location) * alpha;
+        result.rotationDegrees =
+            previous.transform.rotationDegrees +
+            (next.transform.rotationDegrees - previous.transform.rotationDegrees) * alpha;
+        result.scale =
+            previous.transform.scale +
+            (next.transform.scale - previous.transform.scale) * alpha;
+        return result;
+    }
+    return track.keys.back().transform;
+}
+
+void SkeletalAnimationComponent::rebuildClip() {
+    tracks_.clear();
+    length_ = 0.0F;
+    playbackTime_ = 0.0F;
+    appliedPoseCount_ = 0;
+    loop_ = true;
+    if (clipJson_.empty()) {
+        return;
+    }
+
+    try {
+        const Json clip = Json::parse(clipJson_);
+        length_ = std::max(clip.value("length", 0.0F), 0.0F);
+        loop_ = clip.value("loop", true);
+
+        for (const Json& trackJson : clip.value("tracks", Json::array())) {
+            Track track;
+            track.bone = trackJson.value("bone", std::string{});
+            if (track.bone.empty()) {
+                continue;
+            }
+            for (const Json& keyJson : trackJson.value("keys", Json::array())) {
+                Keyframe key;
+                key.time = std::max(keyJson.value("time", 0.0F), 0.0F);
+                key.transform = transformFromKeyJson(keyJson);
+                track.keys.push_back(key);
+                length_ = std::max(length_, key.time);
+            }
+            std::sort(
+                track.keys.begin(),
+                track.keys.end(),
+                [](const Keyframe& first, const Keyframe& second) {
+                    return first.time < second.time;
+                }
+            );
+            if (!track.keys.empty()) {
+                tracks_.push_back(std::move(track));
+            }
+        }
+    } catch (const std::exception&) {
+        tracks_.clear();
+        length_ = 0.0F;
+    }
 }
 
 BlueprintComponent::BlueprintComponent(std::string name, Actor* owner)

@@ -16,7 +16,8 @@
 3. `PlayerController`
 4. `Character`
 5. `HealthComponent`, `ProjectileComponent`, `CombatComponent`
-6. `src/Gameplay.cpp`
+6. `SkeletalAnimationComponent`, `BlueprintComponent`
+7. `src/Gameplay.cpp`
 
 Edit World와 PIE World가 왜 따로 존재하는지, Controller가 Character를 어떻게
 possess하는지 살펴본다. 그다음 `CombatComponent::fireProjectile`에서 투사체
@@ -70,6 +71,8 @@ reflection 정보 하나가 Details 패널과 JSON 저장에 함께 쓰이는 �
 - `testRenderProxyDirtyUpdate`: 변경된 proxy만 갱신
 - `testCharacterCameraSeesPlayer`: 카메라가 플레이어를 바라보는지 확인
 - `testCombatProjectileDamagesHealth`: 투사체가 HealthComponent에 피해를 주는지 확인
+- `testSkeletalAnimationAppliesBonePose`: keyframe clip이 bone Transform을 보간하는지 확인
+- `testCharacterCreatesAnimatedBodyBone`: Character 기본 animation component가 pose를 적용하는지 확인
 - `testEditorViewportMath`: 에디터 카메라와 screen ray
 - `testRenderProxyPicking`: 가장 가까운 visible cube 선택
 - `testWorldRestoreAndSnapshotTransactions`: 구조 편집 Undo/Redo

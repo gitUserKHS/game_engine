@@ -632,6 +632,52 @@ void registerEngineTypes() {
         },
     });
     registry.registerType({
+        "SkeletalAnimationComponent",
+        &actorComponent,
+        [](Object* outer, std::string name) {
+            return std::make_unique<SkeletalAnimationComponent>(
+                std::move(name),
+                dynamic_cast<Actor*>(outer)
+            );
+        },
+        {
+            {
+                "ClipJson",
+                "Animation",
+                PropertyType::String,
+                kEditSave,
+                [](const Object& object) -> PropertyValue {
+                    return dynamic_cast<const SkeletalAnimationComponent&>(object)
+                        .clipJson();
+                },
+                [](Object& object, const PropertyValue& value) {
+                    auto* animation =
+                        dynamic_cast<SkeletalAnimationComponent*>(&object);
+                    const auto* clip = std::get_if<std::string>(&value);
+                    if (animation == nullptr || clip == nullptr) {
+                        return false;
+                    }
+                    animation->setClipJson(*clip);
+                    return true;
+                },
+            },
+            property<SkeletalAnimationComponent, bool>(
+                "Playing",
+                "Animation",
+                PropertyType::Boolean,
+                &SkeletalAnimationComponent::playing,
+                &SkeletalAnimationComponent::setPlaying
+            ),
+            property<SkeletalAnimationComponent, float>(
+                "PlaybackTime",
+                "Animation",
+                PropertyType::Float,
+                &SkeletalAnimationComponent::playbackTime,
+                &SkeletalAnimationComponent::setPlaybackTime
+            ),
+        },
+    });
+    registry.registerType({
         "BlueprintComponent",
         &actorComponent,
         [](Object* outer, std::string name) {
