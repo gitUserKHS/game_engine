@@ -187,6 +187,9 @@ std::optional<ProjectManifest> ProjectManifest::load(
         result.gameSourceRoot =
             result.root / json.value("gameSourceRoot", "Game/Source");
         result.gameModuleTarget = json.value("gameModuleTarget", "game_module");
+        result.editorExecutable = result.root / json.value(
+            "editorExecutable", "out/build/windows-debug/topdown_engine.exe"
+        );
         result.configurePreset = json.value("configurePreset", "windows-debug");
         result.buildPreset = json.value("buildPreset", "windows-debug");
         result.testPreset = json.value("testPreset", "windows-debug");
@@ -230,6 +233,7 @@ Json ProjectManifest::toJson() const {
         {"defaultWorld", pathText(defaultWorld)},
         {"gameSourceRoot", pathText(gameSourceRoot)},
         {"gameModuleTarget", gameModuleTarget},
+        {"editorExecutable", pathText(editorExecutable)},
         {"configurePreset", configurePreset},
         {"buildPreset", buildPreset},
         {"testPreset", testPreset},

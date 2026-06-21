@@ -334,8 +334,14 @@ Json McpServer::callTool(std::string_view name, const Json& arguments) {
         if (!project.canWrite(capturePath)) {
             return textResult({{"success", false}, {"error", "Capture path is not allowed."}}, true);
         }
-        const std::filesystem::path executable =
-            project.root / "out/build" / project.buildPreset / "topdown_engine.exe";
+        const std::filesystem::path executable = project.editorExecutable;
+        if (!std::filesystem::is_regular_file(executable)) {
+            return textResult({
+                {"success", false},
+                {"error", "Editor executable does not exist."},
+                {"path", executable.string()}
+            }, true);
+        }
         const std::string command = quote(executable) + " --hidden --capture " +
             quote(capturePath) +
             " --capture-target both --capture-frame 3 --exit-after-capture";

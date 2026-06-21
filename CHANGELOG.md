@@ -7,6 +7,8 @@
 
 ### Added
 
+- 에디터, MCP, 리소스, GameModule SDK를 한 폴더에 설치하는 이동식 패키징 도구
+- 배포된 SDK만으로 GameModule을 재빌드하고 MCP를 초기화하는 package smoke test
 - `CocoaProject.json` 기반 AI 프로젝트 manifest와 쓰기 경로 정책
 - 원자적 `.cocoa.json` 명령을 처리하는 `AuthoringSession`
 - MCP `2025-11-25` stdio 서버와 reflection/World/build/capture 도구

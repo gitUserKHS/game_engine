@@ -38,6 +38,7 @@ struct ProjectManifest {
     std::filesystem::path defaultWorld;
     std::filesystem::path gameSourceRoot;
     std::string gameModuleTarget;
+    std::filesystem::path editorExecutable;
     std::string configurePreset;
     std::string buildPreset;
     std::string testPreset;

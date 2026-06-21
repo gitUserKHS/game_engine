@@ -17,6 +17,7 @@ Unreal Engine의 규모를 복제하기보다 `World -> Actor -> Component` 구�
 6. [AI 시각 테스트](docs/AI_VISUAL_TESTING.md)
 7. [용어집](docs/GLOSSARY.md)
 8. [AI 에이전트 제작 가이드](docs/AI_AGENT_AUTHORING.md)
+9. [이동식 배포 패키지 만들기](docs/04_DISTRIBUTABLE_PACKAGE.md)
 
 Visual Studio의 **Developer PowerShell for VS**에서 빠른 빌드:
 
