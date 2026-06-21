@@ -37,7 +37,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG v1.90.9
+    GIT_TAG v1.90.9-docking
     GIT_SHALLOW TRUE
 )
 
@@ -55,7 +55,14 @@ FetchContent_Declare(
     GIT_SHALLOW TRUE
 )
 
-FetchContent_MakeAvailable(glfw glm imgui nlohmann_json imguizmo)
+FetchContent_Declare(
+    stb
+    GIT_REPOSITORY https://github.com/nothings/stb.git
+    GIT_TAG 31c1ad37456438565541f4919958214b6e762fb4
+    GIT_SHALLOW TRUE
+)
+
+FetchContent_MakeAvailable(glfw glm imgui nlohmann_json imguizmo stb)
 
 find_package(OpenGL REQUIRED)
 
@@ -69,8 +76,10 @@ add_library(engine_core STATIC
     src/Systems.cpp
     src/Gameplay.cpp
     src/Reflection.cpp
+    src/Editor.cpp
+    src/Screenshot.cpp
 )
-target_include_directories(engine_core PUBLIC include)
+target_include_directories(engine_core PUBLIC include PRIVATE ${stb_SOURCE_DIR})
 target_link_libraries(engine_core PUBLIC glm::glm nlohmann_json::nlohmann_json)
 target_compile_definitions(engine_core PRIVATE GLM_ENABLE_EXPERIMENTAL)
 
@@ -108,8 +117,8 @@ add_executable(topdown_engine
 target_include_directories(topdown_engine PRIVATE include)
 target_compile_definitions(
     topdown_engine
-    PRIVATE ENGINE_SHADER_DIR="${CMAKE_CURRENT_SOURCE_DIR}/shaders"
-            ENGINE_CONTENT_DIR="${CMAKE_CURRENT_SOURCE_DIR}/Content"
+    PRIVATE ENGINE_SHADER_DIR=L"${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+            ENGINE_CONTENT_DIR=L"${CMAKE_CURRENT_SOURCE_DIR}/Content"
 )
 target_link_libraries(
     topdown_engine
@@ -140,6 +149,7 @@ endif()
 include(CTest)
 if(BUILD_TESTING)
     add_executable(engine_tests tests/EngineTests.cpp)
+    target_include_directories(engine_tests PRIVATE ${stb_SOURCE_DIR})
     target_link_libraries(engine_tests PRIVATE engine_core)
     add_test(NAME engine_tests COMMAND engine_tests)
 endif()

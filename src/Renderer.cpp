@@ -11,13 +11,121 @@
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
+#include <unordered_set>
 #include <vector>
 
 #ifndef ENGINE_SHADER_DIR
-#define ENGINE_SHADER_DIR "shaders"
+#define ENGINE_SHADER_DIR L"shaders"
 #endif
 
 namespace engine {
+
+ViewportRenderTarget::ViewportRenderTarget() {
+    glGenFramebuffers(1, &framebuffer_);
+    glGenTextures(1, &colorTexture_);
+    glGenRenderbuffers(1, &depthRenderbuffer_);
+}
+
+ViewportRenderTarget::~ViewportRenderTarget() {
+    glDeleteRenderbuffers(1, &depthRenderbuffer_);
+    glDeleteTextures(1, &colorTexture_);
+    glDeleteFramebuffers(1, &framebuffer_);
+}
+
+bool ViewportRenderTarget::resize(int width, int height) {
+    width = std::max(width, 1);
+    height = std::max(height, 1);
+    if (width_ == width && height_ == height) {
+        return true;
+    }
+
+    width_ = width;
+    height_ = height;
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer_);
+
+    glBindTexture(GL_TEXTURE_2D, colorTexture_);
+    glTexImage2D(
+        GL_TEXTURE_2D,
+        0,
+        GL_RGBA8,
+        width_,
+        height_,
+        0,
+        GL_RGBA,
+        GL_UNSIGNED_BYTE,
+        nullptr
+    );
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glFramebufferTexture2D(
+        GL_FRAMEBUFFER,
+        GL_COLOR_ATTACHMENT0,
+        GL_TEXTURE_2D,
+        colorTexture_,
+        0
+    );
+
+    glBindRenderbuffer(GL_RENDERBUFFER, depthRenderbuffer_);
+    glRenderbufferStorage(
+        GL_RENDERBUFFER,
+        GL_DEPTH24_STENCIL8,
+        width_,
+        height_
+    );
+    glFramebufferRenderbuffer(
+        GL_FRAMEBUFFER,
+        GL_DEPTH_STENCIL_ATTACHMENT,
+        GL_RENDERBUFFER,
+        depthRenderbuffer_
+    );
+
+    const bool complete =
+        glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    return complete;
+}
+
+void ViewportRenderTarget::bind() const {
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer_);
+}
+
+void ViewportRenderTarget::unbind() {
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+unsigned int ViewportRenderTarget::colorTexture() const {
+    return colorTexture_;
+}
+
+int ViewportRenderTarget::width() const {
+    return width_;
+}
+
+int ViewportRenderTarget::height() const {
+    return height_;
+}
+
+std::vector<unsigned char> ViewportRenderTarget::readRgba() const {
+    std::vector<unsigned char> pixels(
+        static_cast<std::size_t>(width_ * height_ * 4)
+    );
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer_);
+    glReadBuffer(GL_COLOR_ATTACHMENT0);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(
+        0,
+        0,
+        width_,
+        height_,
+        GL_RGBA,
+        GL_UNSIGNED_BYTE,
+        pixels.data()
+    );
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    return pixels;
+}
 
 Renderer::Renderer()
     : program_(createProgram()) {
@@ -71,6 +179,71 @@ void Renderer::render(const RenderScene& scene) const {
     }
 }
 
+void Renderer::renderToTarget(
+    ViewportRenderTarget& target,
+    const RenderScene& scene,
+    const CameraView& camera,
+    std::span<const Guid> selectedComponents
+) {
+    target.bind();
+    glViewport(0, 0, target.width(), target.height());
+    glEnable(GL_DEPTH_TEST);
+    glClearColor(0.08F, 0.10F, 0.14F, 1.0F);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    viewProjection_ = camera.viewProjection();
+    render(scene);
+
+    if (!selectedComponents.empty()) {
+        const std::unordered_set<Guid> selected{
+            selectedComponents.begin(),
+            selectedComponents.end(),
+        };
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        glLineWidth(3.0F);
+        for (const RenderProxy& proxy : scene.proxies()) {
+            if (selected.contains(proxy.componentGuid)) {
+                drawCubeModel(
+                    glm::scale(proxy.worldMatrix, glm::vec3{1.015F}),
+                    {1.0F, 0.72F, 0.12F}
+                );
+            }
+        }
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+        glLineWidth(1.0F);
+    }
+    ViewportRenderTarget::unbind();
+}
+
+void Renderer::clearBackbuffer(int width, int height) const {
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, std::max(width, 1), std::max(height, 1));
+    glDisable(GL_DEPTH_TEST);
+    glClearColor(0.045F, 0.052F, 0.065F, 1.0F);
+    glClear(GL_COLOR_BUFFER_BIT);
+}
+
+std::vector<unsigned char> Renderer::readBackbufferRgba(
+    int width,
+    int height
+) const {
+    std::vector<unsigned char> pixels(
+        static_cast<std::size_t>(width * height * 4)
+    );
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glReadBuffer(GL_BACK);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(
+        0,
+        0,
+        width,
+        height,
+        GL_RGBA,
+        GL_UNSIGNED_BYTE,
+        pixels.data()
+    );
+    return pixels;
+}
+
 void Renderer::drawCubeModel(
     const glm::mat4& model,
     const glm::vec3& color
@@ -118,10 +291,10 @@ unsigned int Renderer::compileShader(unsigned int type, const std::string& sourc
     return shader;
 }
 
-std::string Renderer::readTextFile(const std::string& path) {
+std::string Renderer::readTextFile(const std::filesystem::path& path) {
     std::ifstream file(path);
     if (!file) {
-        throw std::runtime_error("Could not open shader file: " + path);
+        throw std::runtime_error("Could not open a shader file.");
     }
 
     std::ostringstream contents;
@@ -130,14 +303,14 @@ std::string Renderer::readTextFile(const std::string& path) {
 }
 
 unsigned int Renderer::createProgram() {
-    const std::string shaderDirectory = ENGINE_SHADER_DIR;
+    const std::filesystem::path shaderDirectory{ENGINE_SHADER_DIR};
     const unsigned int vertexShader = compileShader(
         GL_VERTEX_SHADER,
-        readTextFile(shaderDirectory + "/basic.vert")
+        readTextFile(shaderDirectory / "basic.vert")
     );
     const unsigned int fragmentShader = compileShader(
         GL_FRAGMENT_SHADER,
-        readTextFile(shaderDirectory + "/basic.frag")
+        readTextFile(shaderDirectory / "basic.frag")
     );
 
     const unsigned int program = glCreateProgram();

@@ -183,27 +183,53 @@ public:
         const std::filesystem::path& path,
         OutputLog* log = nullptr
     );
+    /// World 객체 주소는 유지하고 내부 Actor와 시스템 상태만 JSON으로 교체한다.
+    static bool restore(
+        World& world,
+        std::string_view text,
+        OutputLog* log = nullptr
+    );
+    /// Actor와 소유 Component에 새 GUID를 부여해 같은 World에 복제한다.
+    [[nodiscard]] static Actor* duplicateActor(
+        World& world,
+        const Actor& source,
+        std::string name,
+        OutputLog* log = nullptr
+    );
+};
+
+struct PropertyChange {
+    Guid object;
+    std::string property;
+    PropertyValue before;
+    PropertyValue after;
 };
 
 class TransactionStack {
 public:
-    /// Details 편집 한 건의 이전/이후 값을 저장해 Undo와 Redo를 적용한다.
+    /// 프로퍼티 묶음 또는 World snapshot을 한 번의 Undo/Redo 단위로 저장한다.
     void record(
         Guid object,
         std::string property,
         PropertyValue before,
         PropertyValue after
     );
+    void recordGroup(std::vector<PropertyChange> changes);
+    void recordTransform(
+        Guid object,
+        const Transform& before,
+        const Transform& after
+    );
+    void recordSnapshot(std::string before, std::string after);
     bool undo(World& world);
     bool redo(World& world);
     void clear();
 
 private:
     struct Transaction {
-        Guid object;
-        std::string property;
-        PropertyValue before;
-        PropertyValue after;
+        std::vector<PropertyChange> changes;
+        std::string beforeSnapshot;
+        std::string afterSnapshot;
     };
 
     bool apply(World& world, const Transaction& transaction, bool useAfter);

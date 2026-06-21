@@ -121,6 +121,12 @@ void Controller::setPawnGuid(Guid guid) {
     possess(dynamic_cast<Pawn*>(world()->findActor(guid)));
 }
 
+void Controller::onActorDestroyed(Actor& actor) {
+    if (pawn_ == &actor) {
+        possess(nullptr);
+    }
+}
+
 PlayerController::PlayerController(std::string name, World* world)
     : Controller(std::move(name), world) {
     tickSettings().enabled = true;
@@ -184,6 +190,13 @@ void EngineRuntime::setEditWorld(std::unique_ptr<World> world) {
 }
 
 World& EngineRuntime::editWorld() {
+    if (editWorld_ == nullptr) {
+        throw std::runtime_error("EngineRuntime has no edit World.");
+    }
+    return *editWorld_;
+}
+
+const World& EngineRuntime::editWorld() const {
     if (editWorld_ == nullptr) {
         throw std::runtime_error("EngineRuntime has no edit World.");
     }

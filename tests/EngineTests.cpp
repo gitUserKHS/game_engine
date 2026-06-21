@@ -1,8 +1,16 @@
 #include "engine/Gameplay.hpp"
+#include "engine/Editor.hpp"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
+
+#include <array>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <stdexcept>
+#include <string_view>
 
 namespace {
 
@@ -14,6 +22,10 @@ void require(bool condition, const char* message) {
 
 bool near(float first, float second) {
     return std::abs(first - second) < 0.001F;
+}
+
+bool near(const glm::vec3& first, const glm::vec3& second) {
+    return glm::length(first - second) < 0.01F;
 }
 
 engine::Actor& addBoxActor(
@@ -201,6 +213,258 @@ void testCharacterCameraSeesPlayer() {
     );
 }
 
+void testEditorViewportMath() {
+    engine::EditorViewportController camera;
+    const glm::vec3 originalPosition = camera.position();
+    const glm::vec3 expectedDirection =
+        glm::normalize(camera.pivot() - camera.position());
+    const engine::EditorRay centerRay =
+        camera.screenRay({400.0F, 300.0F}, {800.0F, 600.0F});
+    require(
+        near(centerRay.direction, expectedDirection),
+        "Center screen ray does not follow the editor camera."
+    );
+
+    engine::EditorViewportInput input;
+    input.deltaTime = 0.25F;
+    input.look = true;
+    input.moveForward = true;
+    input.mouseDelta = {50.0F, 10000.0F};
+    camera.update(input);
+    require(
+        camera.pitchDegrees() >= -89.0F &&
+            camera.pitchDegrees() <= 89.0F,
+        "Editor camera pitch was not clamped."
+    );
+    require(
+        !near(camera.position(), originalPosition),
+        "Editor camera did not move with delta-time input."
+    );
+
+    const glm::vec3 focusPoint{100.0F, 200.0F, 300.0F};
+    const glm::vec3 pivotOnly{25.0F, 50.0F, 75.0F};
+    const glm::vec3 positionBeforePivot = camera.position();
+    camera.setPivot(pivotOnly);
+    require(
+        near(camera.pivot(), pivotOnly) &&
+            near(camera.position(), positionBeforePivot),
+        "Changing the orbit pivot moved the editor camera."
+    );
+    camera.focus(focusPoint, 80.0F);
+    require(
+        near(camera.pivot(), focusPoint),
+        "Editor camera focus did not update its pivot."
+    );
+}
+
+void testRenderProxyPicking() {
+    engine::World world;
+    auto& nearActor = world.spawnActor<engine::Actor>("Near");
+    auto& nearMesh =
+        nearActor.addComponent<engine::StaticMeshComponent>("Mesh");
+    engine::Transform nearTransform;
+    nearTransform.location = {200.0F, 0.0F, 0.0F};
+    nearTransform.scale = {100.0F, 100.0F, 100.0F};
+    nearMesh.setRelativeTransform(nearTransform);
+    nearActor.setRootComponent(&nearMesh);
+
+    auto& farActor = world.spawnActor<engine::Actor>("Far");
+    auto& farMesh =
+        farActor.addComponent<engine::StaticMeshComponent>("Mesh");
+    engine::Transform farTransform = nearTransform;
+    farTransform.location.x = 400.0F;
+    farMesh.setRelativeTransform(farTransform);
+    farActor.setRootComponent(&farMesh);
+    world.renderScene().sync(world);
+
+    const auto hit = engine::pickRenderProxy(
+        world.renderScene(),
+        {{0.0F, 0.0F, 0.0F}, {1.0F, 0.0F, 0.0F}}
+    );
+    require(hit.has_value(), "Render proxy picking missed visible cubes.");
+    require(
+        hit->componentGuid == nearMesh.guid(),
+        "Render proxy picking did not choose the nearest cube."
+    );
+    require(
+        !engine::pickRenderProxy(
+             world.renderScene(),
+             {{0.0F, 1000.0F, 0.0F}, {1.0F, 0.0F, 0.0F}}
+         ).has_value(),
+        "Render proxy picking hit empty space."
+    );
+}
+
+void testWorldRestoreAndSnapshotTransactions() {
+    engine::World world("SnapshotWorld");
+    engine::World* originalAddress = &world;
+    auto& controller =
+        world.spawnActor<engine::PlayerController>("Controller");
+    auto& character = world.spawnActor<engine::Character>("Hero");
+    const engine::Guid controllerGuid = controller.guid();
+    const engine::Guid characterGuid = character.guid();
+    controller.possess(&character);
+
+    const std::string before = engine::WorldSerializer::toJson(world);
+    auto& added = world.spawnActor<engine::Actor>("Added");
+    auto& root = added.addComponent<engine::SceneComponent>("Root");
+    added.setRootComponent(&root);
+    const engine::Guid addedGuid = added.guid();
+    const std::string after = engine::WorldSerializer::toJson(world);
+
+    engine::TransactionStack transactions;
+    transactions.recordSnapshot(before, after);
+    require(transactions.undo(world), "Snapshot undo failed.");
+    require(&world == originalAddress, "Snapshot restore replaced the World.");
+    require(
+        world.findActor(addedGuid) == nullptr,
+        "Snapshot undo kept a newly created Actor."
+    );
+    auto* restoredController = dynamic_cast<engine::PlayerController*>(
+        world.findActor(controllerGuid)
+    );
+    require(
+        restoredController != nullptr &&
+            restoredController->pawn() == world.findActor(characterGuid),
+        "Snapshot restore lost Controller possession."
+    );
+
+    require(transactions.redo(world), "Snapshot redo failed.");
+    require(
+        world.findActor(addedGuid) != nullptr,
+        "Snapshot redo did not recreate the Actor."
+    );
+
+    auto* restoredCharacter =
+        dynamic_cast<engine::Character*>(world.findActor(characterGuid));
+    auto* duplicate = engine::WorldSerializer::duplicateActor(
+        world,
+        *restoredCharacter,
+        "Hero 2"
+    );
+    require(duplicate != nullptr, "Actor duplication failed.");
+    require(
+        duplicate->guid() != restoredCharacter->guid(),
+        "Duplicated Actor reused its source GUID."
+    );
+    require(
+        duplicate->rootComponent() != nullptr &&
+            duplicate->rootComponent()->guid() !=
+                restoredCharacter->rootComponent()->guid(),
+        "Duplicated components reused source GUIDs."
+    );
+    for (const auto& component : duplicate->components()) {
+        require(
+            component->registered(),
+            "Duplicated component was not registered in its new World."
+        );
+    }
+
+    restoredController = dynamic_cast<engine::PlayerController*>(
+        world.findActor(controllerGuid)
+    );
+    world.destroyActor(*restoredCharacter);
+    require(
+        restoredController->pawn() == nullptr,
+        "Destroying a possessed Pawn did not unpossess it first."
+    );
+}
+
+void testApplicationOptions() {
+    const std::array<std::string_view, 9> arguments{
+        "--capture",
+        "Saved/Screenshots/test.png",
+        "--capture-target",
+        "both",
+        "--capture-frame",
+        "7",
+        "--exit-after-capture",
+        "--window-size",
+        "1280x720",
+    };
+    const engine::ApplicationOptions options =
+        engine::parseApplicationOptions(arguments);
+    require(options.screenshot.has_value(), "CLI capture was not parsed.");
+    require(
+        options.screenshot->target == engine::ScreenshotTarget::Both &&
+            options.screenshot->frame == 7 &&
+            options.screenshot->exitAfterCapture,
+        "CLI screenshot options were parsed incorrectly."
+    );
+    require(
+        options.windowWidth == 1280 && options.windowHeight == 720,
+        "CLI window size was parsed incorrectly."
+    );
+
+    bool rejected = false;
+    try {
+        const std::array<std::string_view, 2> invalid{
+            "--window-size",
+            "bad-size",
+        };
+        static_cast<void>(engine::parseApplicationOptions(invalid));
+    } catch (const std::invalid_argument&) {
+        rejected = true;
+    }
+    require(rejected, "Invalid CLI window size was accepted.");
+}
+
+void testPngWriter() {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "cocoa-engine-png-test.png";
+    const std::array<unsigned char, 16> bottomLeftPixels{
+        255, 0, 0, 255,
+        0, 255, 0, 255,
+        0, 0, 255, 255,
+        255, 255, 255, 255,
+    };
+    std::string error;
+    require(
+        engine::writePngRgba(
+            path,
+            2,
+            2,
+            bottomLeftPixels,
+            true,
+            &error
+        ),
+        "PNG writer failed."
+    );
+
+    std::ifstream stream(path, std::ios::binary);
+    std::array<unsigned char, 8> signature{};
+    stream.read(
+        reinterpret_cast<char*>(signature.data()),
+        static_cast<std::streamsize>(signature.size())
+    );
+    const std::array<unsigned char, 8> expectedSignature{
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+    };
+    require(signature == expectedSignature, "PNG signature is invalid.");
+
+    int width = 0;
+    int height = 0;
+    int channels = 0;
+    stbi_uc* decoded = stbi_load(
+        path.string().c_str(),
+        &width,
+        &height,
+        &channels,
+        4
+    );
+    require(
+        decoded != nullptr && width == 2 && height == 2,
+        "PNG dimensions could not be decoded."
+    );
+    require(
+        decoded[0] == 0 && decoded[1] == 0 && decoded[2] == 255,
+        "Bottom-left RGBA data was not flipped for PNG coordinates."
+    );
+    stbi_image_free(decoded);
+    stream.close();
+    std::filesystem::remove(path);
+}
+
 } // namespace
 
 int main() {
@@ -212,6 +476,11 @@ int main() {
         testPieIsolation();
         testRenderProxyDirtyUpdate();
         testCharacterCameraSeesPlayer();
+        testEditorViewportMath();
+        testRenderProxyPicking();
+        testWorldRestoreAndSnapshotTransactions();
+        testApplicationOptions();
+        testPngWriter();
         std::cout << "All engine tests passed.\n";
         return 0;
     } catch (const std::exception& exception) {

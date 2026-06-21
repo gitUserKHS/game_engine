@@ -269,6 +269,7 @@ void Actor::onConstruction() {}
 void Actor::beginPlay() {}
 void Actor::tick(float) {}
 void Actor::endPlay() {}
+void Actor::onActorDestroyed(Actor&) {}
 
 void Actor::addOwnedComponent(std::unique_ptr<ActorComponent> component) {
     ActorComponent* pointer = component.get();
@@ -382,6 +383,11 @@ Actor* World::spawnActorByType(
 
 void World::destroyActor(Actor& actor) {
     if (actor.world() == this) {
+        for (const auto& observer : actors_) {
+            if (observer.get() != &actor) {
+                observer->onActorDestroyed(actor);
+            }
+        }
         actor.pendingDestroy_ = true;
         if (!ticking_) {
             flushDeferredChanges();

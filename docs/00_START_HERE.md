@@ -36,6 +36,9 @@ flowchart LR
 
 여기까지 읽었으면 엔진 전체를 외우지 않아도 큰 길은 이미 잡은 것이다.
 
+에디터 조작부터 체험하고 싶다면
+[3D 에디터 첫 실습](03_EDITOR_QUICKSTART.md)을 먼저 따라 해도 좋다.
+
 ## 두 번째 산책: 플레이어 이동
 
 ```mermaid
@@ -76,6 +79,7 @@ Component가 OpenGL을 직접 호출하지 않는 것이 핵심이다. 게임 �
 
 - 직접 실행하려면 [빌드와 실행](01_BUILD_AND_RUN.md)
 - 파일별 읽기 순서는 [코드 읽기 순서](02_CODE_READING_ORDER.md)
+- 자동 스크린샷은 [AI 시각 테스트](AI_VISUAL_TESTING.md)
 - 낯선 단어는 [용어집](GLOSSARY.md)
 - Actor와 Component가 궁금하면
   [World, Actor, Component](modules/world-actor-component.md)

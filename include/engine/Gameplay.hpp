@@ -46,6 +46,7 @@ public:
     [[nodiscard]] Pawn* pawn() const;
     [[nodiscard]] Guid pawnGuid() const;
     void setPawnGuid(Guid guid);
+    void onActorDestroyed(Actor& actor) override;
 
 private:
     Pawn* pawn_{nullptr};
@@ -93,6 +94,7 @@ public:
 
     void setEditWorld(std::unique_ptr<World> world);
     [[nodiscard]] World& editWorld();
+    [[nodiscard]] const World& editWorld() const;
     [[nodiscard]] World& activeWorld();
     [[nodiscard]] const World& activeWorld() const;
 

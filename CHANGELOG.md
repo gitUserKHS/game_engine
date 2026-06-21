@@ -7,7 +7,19 @@
 
 ### Added
 
-- 다음 버전 변경을 이곳에 기록한다.
+- 크기 조절 가능한 OpenGL framebuffer 기반 ImGui Viewport
+- Unreal 방식 에디터 카메라, visible proxy 클릭 선택, 선택 wireframe
+- ImGuizmo 이동·회전·크기 편집, Local/World, snapping
+- Actor 생성·복제·삭제와 snapshot 기반 Undo/Redo
+- 자유 도킹 패널과 `Saved/Editor/imgui.ini` 배치 저장
+- `F9` 및 CLI editor/viewport PNG와 JSON metadata 캡처
+- 카메라, picking, snapshot 복원, CLI, PNG 방향 테스트
+- 에디터 첫 실습과 AI 시각 테스트 한국어 문서
+
+### Changed
+
+- Dear ImGui를 재현 가능한 `v1.90.9-docking` 태그로 고정했다.
+- Windows 한글 작업경로에서 Content, shader, screenshot을 처리한다.
 
 ## [0.5.0] - 2026-06-14
 

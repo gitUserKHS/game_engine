@@ -5,11 +5,40 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
+#include <filesystem>
+#include <span>
 #include <string>
+#include <vector>
 
 namespace engine {
 
 class RenderScene;
+
+/// ImGui Viewport에 표시할 color texture와 depth buffer를 소유한다.
+class ViewportRenderTarget {
+public:
+    ViewportRenderTarget();
+    ~ViewportRenderTarget();
+
+    ViewportRenderTarget(const ViewportRenderTarget&) = delete;
+    ViewportRenderTarget& operator=(const ViewportRenderTarget&) = delete;
+
+    bool resize(int width, int height);
+    void bind() const;
+    static void unbind();
+
+    [[nodiscard]] unsigned int colorTexture() const;
+    [[nodiscard]] int width() const;
+    [[nodiscard]] int height() const;
+    [[nodiscard]] std::vector<unsigned char> readRgba() const;
+
+private:
+    unsigned int framebuffer_{0};
+    unsigned int colorTexture_{0};
+    unsigned int depthRenderbuffer_{0};
+    int width_{0};
+    int height_{0};
+};
 
 /// OpenGL 객체와 draw call을 소유하는 유일한 계층이다. GL context보다 먼저 파괴된다.
 class Renderer {
@@ -31,10 +60,21 @@ public:
     );
     void render(const RenderScene& scene) const;
     void drawGrid() const;
+    void renderToTarget(
+        ViewportRenderTarget& target,
+        const RenderScene& scene,
+        const CameraView& camera,
+        std::span<const Guid> selectedComponents = {}
+    );
+    void clearBackbuffer(int width, int height) const;
+    [[nodiscard]] std::vector<unsigned char> readBackbufferRgba(
+        int width,
+        int height
+    ) const;
 
 private:
     static unsigned int compileShader(unsigned int type, const std::string& source);
-    static std::string readTextFile(const std::string& path);
+    static std::string readTextFile(const std::filesystem::path& path);
     static unsigned int createProgram();
     void createCubeMesh();
     void createGridMesh(float halfExtent, float spacing);

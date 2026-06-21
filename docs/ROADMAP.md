@@ -14,6 +14,10 @@
 
 ## v0.6 Rendering과 Materials
 
+- [x] off-screen 3D Viewport와 Unreal 방식 에디터 카메라
+- [x] 클릭 선택, Transform 기즈모, snapping
+- [x] Actor 생성·복제·삭제와 Undo/Redo
+- [x] 도킹 레이아웃과 자동 시각 테스트 캡처
 - [ ] DirectionalLight를 사용하는 기본 Lambert 조명
 - [ ] Material과 MaterialInstance 연결
 - [ ] Shadow, Opaque, Debug, UI 렌더 패스

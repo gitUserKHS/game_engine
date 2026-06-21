@@ -10,10 +10,19 @@
 #include <limits>
 #include <map>
 #include <sstream>
+#include <unordered_map>
 
 namespace {
 
 using Json = nlohmann::json;
+
+std::string pathToUtf8(const std::filesystem::path& path) {
+    const std::u8string utf8 = path.u8string();
+    return {
+        reinterpret_cast<const char*>(utf8.data()),
+        utf8.size(),
+    };
+}
 
 Json vectorToJson(const glm::vec3& value) {
     return Json::array({value.x, value.y, value.z});
@@ -502,7 +511,10 @@ void AssetRegistry::scan(
             stream >> meta;
             AssetData asset;
             asset.guid = parseGuid(meta.at("guid"));
-            asset.name = meta.value("name", entry.path().stem().string());
+            asset.name = meta.value(
+                "name",
+                pathToUtf8(entry.path().stem())
+            );
             asset.type = meta.value("type", "Unknown");
             asset.source = entry.path().parent_path() /
                            meta.value("source", std::string{});
@@ -510,7 +522,7 @@ void AssetRegistry::scan(
         } catch (const std::exception& exception) {
             if (log != nullptr) {
                 log->write(
-                    "Could not read " + entry.path().string() + ": " +
+                    "Could not read " + pathToUtf8(entry.path()) + ": " +
                     exception.what()
                 );
             }
@@ -700,18 +712,167 @@ std::unique_ptr<World> WorldSerializer::load(
     return fromJson(contents.str(), log);
 }
 
+bool WorldSerializer::restore(
+    World& world,
+    std::string_view text,
+    OutputLog* log
+) {
+    std::unique_ptr<World> loaded;
+    try {
+        loaded = fromJson(text, log);
+    } catch (const std::exception& exception) {
+        if (log != nullptr) {
+            log->write(
+                "Could not restore World snapshot: " +
+                std::string{exception.what()}
+            );
+        }
+        return false;
+    }
+    if (loaded == nullptr) {
+        return false;
+    }
+
+    InputSystem* input = world.inputSystem_;
+    world.clearForLoad();
+    world.setGuid(loaded->guid());
+    world.setName(loaded->name());
+    world.actors_ = std::move(loaded->actors_);
+    world.pendingSpawns_.clear();
+    world.collisionWorld_ = std::move(loaded->collisionWorld_);
+    world.renderScene_ = std::move(loaded->renderScene_);
+    world.inputSystem_ = input;
+    world.beganPlay_ = false;
+    world.ticking_ = false;
+
+    for (const auto& actor : world.actors_) {
+        actor->world_ = &world;
+        actor->setOuter(&world);
+    }
+    return true;
+}
+
+Actor* WorldSerializer::duplicateActor(
+    World& world,
+    const Actor& source,
+    std::string name,
+    OutputLog* log
+) {
+    Json root = Json::parse(toJson(world));
+    const Json* sourceJson = nullptr;
+    for (const Json& actorJson : root.at("actors")) {
+        if (parseGuid(actorJson.at("guid")) == source.guid()) {
+            sourceJson = &actorJson;
+            break;
+        }
+    }
+    if (sourceJson == nullptr) {
+        return nullptr;
+    }
+
+    Json clone = *sourceJson;
+    clone["name"] = std::move(name);
+    std::unordered_map<std::string, std::string> remappedGuids;
+    const std::string oldActorGuid = clone.at("guid").get<std::string>();
+    const std::string newActorGuid = Guid::create().toString();
+    remappedGuids.emplace(oldActorGuid, newActorGuid);
+    clone["guid"] = newActorGuid;
+
+    for (Json& component : clone.at("components")) {
+        const std::string oldGuid = component.at("guid").get<std::string>();
+        const std::string newGuid = Guid::create().toString();
+        remappedGuids.emplace(oldGuid, newGuid);
+        component["guid"] = newGuid;
+    }
+    const auto remap = [&remappedGuids](Json& value) {
+        if (!value.is_string()) {
+            return;
+        }
+        const auto found = remappedGuids.find(value.get<std::string>());
+        if (found != remappedGuids.end()) {
+            value = found->second;
+        }
+    };
+    remap(clone["root"]);
+    for (Json& component : clone.at("components")) {
+        remap(component["parent"]);
+    }
+
+    Json temporaryRoot{
+        {"version", 1},
+        {"type", "World"},
+        {"guid", Guid::create().toString()},
+        {"name", "DuplicateActorTemporaryWorld"},
+        {"actors", Json::array({clone})},
+    };
+    auto temporary = fromJson(temporaryRoot.dump(), log);
+    if (temporary == nullptr || temporary->actors_.empty()) {
+        return nullptr;
+    }
+
+    std::unique_ptr<Actor> duplicate = std::move(temporary->actors_.front());
+    temporary->actors_.clear();
+    // 임시 World의 등록 상태를 새 World로 가져가면 onRegister가 생략된다.
+    duplicate->unregisterComponents();
+    duplicate->world_ = &world;
+    duplicate->setOuter(&world);
+    Actor* result = world.adoptActor(std::move(duplicate), false);
+    applyProperties(
+        *result,
+        clone.value("properties", Json::object()),
+        log
+    );
+    return result;
+}
+
 void TransactionStack::record(
     Guid object,
     std::string property,
     PropertyValue before,
     PropertyValue after
 ) {
-    undo_.push_back({
+    recordGroup({{
         object,
         std::move(property),
         std::move(before),
         std::move(after),
+    }});
+}
+
+void TransactionStack::recordGroup(std::vector<PropertyChange> changes) {
+    if (changes.empty()) {
+        return;
+    }
+    undo_.push_back({std::move(changes), {}, {}});
+    redo_.clear();
+}
+
+void TransactionStack::recordTransform(
+    Guid object,
+    const Transform& before,
+    const Transform& after
+) {
+    constexpr float epsilon = 0.0001F;
+    if (glm::length(before.location - after.location) < epsilon &&
+        glm::length(before.rotationDegrees - after.rotationDegrees) < epsilon &&
+        glm::length(before.scale - after.scale) < epsilon) {
+        return;
+    }
+    recordGroup({
+        {object, "Location", before.location, after.location},
+        {object, "Rotation", before.rotationDegrees, after.rotationDegrees},
+        {object, "Scale", before.scale, after.scale},
     });
+}
+
+void TransactionStack::recordSnapshot(
+    std::string before,
+    std::string after
+) {
+    if (before == after) {
+        return;
+    }
+    undo_.push_back({{}, std::move(before), std::move(after)});
     redo_.clear();
 }
 
@@ -722,6 +883,7 @@ bool TransactionStack::undo(World& world) {
     Transaction transaction = std::move(undo_.back());
     undo_.pop_back();
     if (!apply(world, transaction, false)) {
+        undo_.push_back(std::move(transaction));
         return false;
     }
     redo_.push_back(std::move(transaction));
@@ -735,6 +897,7 @@ bool TransactionStack::redo(World& world) {
     Transaction transaction = std::move(redo_.back());
     redo_.pop_back();
     if (!apply(world, transaction, true)) {
+        redo_.push_back(std::move(transaction));
         return false;
     }
     undo_.push_back(std::move(transaction));
@@ -751,21 +914,36 @@ bool TransactionStack::apply(
     const Transaction& transaction,
     bool useAfter
 ) {
-    Object* object = world.findObject(transaction.object);
-    if (object == nullptr || object->typeDescriptor() == nullptr) {
-        return false;
+    if (!transaction.beforeSnapshot.empty() ||
+        !transaction.afterSnapshot.empty()) {
+        return WorldSerializer::restore(
+            world,
+            useAfter ? transaction.afterSnapshot : transaction.beforeSnapshot
+        );
     }
 
-    for (const PropertyDescriptor* property :
-         object->typeDescriptor()->allProperties()) {
-        if (property->name == transaction.property && property->setter) {
-            return property->setter(
-                *object,
-                useAfter ? transaction.after : transaction.before
-            );
+    bool applied = true;
+    for (const PropertyChange& change : transaction.changes) {
+        Object* object = world.findObject(change.object);
+        if (object == nullptr || object->typeDescriptor() == nullptr) {
+            applied = false;
+            continue;
         }
+
+        bool found = false;
+        for (const PropertyDescriptor* property :
+             object->typeDescriptor()->allProperties()) {
+            if (property->name == change.property && property->setter) {
+                found = property->setter(
+                    *object,
+                    useAfter ? change.after : change.before
+                );
+                break;
+            }
+        }
+        applied = applied && found;
     }
-    return false;
+    return applied;
 }
 
 } // namespace engine

@@ -32,15 +32,18 @@ possess하는지 살펴본다.
 
 ## 4단계: 화면과 충돌
 
-1. `include/engine/Components.hpp`
-2. `include/engine/RenderTypes.hpp`
-3. `include/engine/Systems.hpp`
-4. `src/Components.cpp`
-5. `src/Systems.cpp`
-6. `src/Renderer.cpp`
+1. `include/engine/Editor.hpp`
+2. `include/engine/Components.hpp`
+3. `include/engine/RenderTypes.hpp`
+4. `include/engine/Systems.hpp`
+5. `src/Editor.cpp`
+6. `src/Components.cpp`
+7. `src/Systems.cpp`
+8. `src/Renderer.cpp`
 
 `StaticMeshComponent -> RenderProxy -> RenderScene -> Renderer`와
-`BoxComponent -> CollisionWorld` 두 흐름을 각각 따라간다.
+`BoxComponent -> CollisionWorld` 두 흐름을 각각 따라간다. 그다음
+`EditorViewportController -> EditorRay -> pickRenderProxy` 선택 흐름을 읽는다.
 
 ## 5단계: 저장과 편집
 
@@ -48,7 +51,8 @@ possess하는지 살펴본다.
 2. `WorldSerializer`
 3. `AssetRegistry`
 4. `TransactionStack`
-5. `Application::drawEditor`
+5. `Application::drawViewportPanel`
+6. `Application::drawDetails`
 
 reflection 정보 하나가 Details 패널과 JSON 저장에 함께 쓰이는 점을 찾아본다.
 
@@ -62,6 +66,10 @@ reflection 정보 하나가 Details 패널과 JSON 저장에 함께 쓰이는 �
 - `testPieIsolation`: PIE 복제본 격리
 - `testRenderProxyDirtyUpdate`: 변경된 proxy만 갱신
 - `testCharacterCameraSeesPlayer`: 카메라가 플레이어를 바라보는지 확인
+- `testEditorViewportMath`: 에디터 카메라와 screen ray
+- `testRenderProxyPicking`: 가장 가까운 visible cube 선택
+- `testWorldRestoreAndSnapshotTransactions`: 구조 편집 Undo/Redo
+- `testApplicationOptions`, `testPngWriter`: 자동 캡처 입력과 PNG 방향
 
 각 테스트에서 객체를 만드는 부분을 먼저 읽고, 검증식이 기대하는 규칙을
 한국어 한 문장으로 바꿔 적어 보면 구조가 훨씬 빨리 익숙해진다.
