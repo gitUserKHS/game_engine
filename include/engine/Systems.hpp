@@ -159,12 +159,34 @@ struct AssetData {
     std::filesystem::path source;
 };
 
+struct StaticMeshAsset {
+    Guid guid;
+    MeshPrimitive primitive{MeshPrimitive::Cube};
+};
+
+struct MaterialAsset {
+    Guid guid;
+    MaterialInstance material;
+};
+
 class AssetRegistry {
 public:
     /// Content 아래 .meta를 스캔하며 GPU 리소스는 소유하지 않는다.
     void scan(const std::filesystem::path& contentRoot, OutputLog* log = nullptr);
     [[nodiscard]] const std::vector<AssetData>& assets() const;
     [[nodiscard]] const AssetData* find(Guid guid) const;
+    [[nodiscard]] const AssetData* findByName(std::string_view name) const;
+    [[nodiscard]] std::vector<const AssetData*> findByType(
+        std::string_view type
+    ) const;
+    [[nodiscard]] std::optional<StaticMeshAsset> loadStaticMesh(
+        Guid guid,
+        OutputLog* log = nullptr
+    ) const;
+    [[nodiscard]] std::optional<MaterialAsset> loadMaterial(
+        Guid guid,
+        OutputLog* log = nullptr
+    ) const;
 
 private:
     std::vector<AssetData> assets_;

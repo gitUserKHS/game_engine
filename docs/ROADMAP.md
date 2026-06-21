@@ -25,7 +25,8 @@
 
 ## v0.7 Asset Pipeline
 
-- [ ] GUID 기반 asset handle
+- [x] GUID 기반 asset handle
+- [x] StaticMesh와 Material JSON 에셋 CPU 로딩
 - [ ] glTF와 texture import
 - [ ] 요청 시 GPU resource 생성
 - [ ] Content Browser import 흐름

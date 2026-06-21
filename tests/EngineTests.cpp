@@ -43,6 +43,12 @@ engine::Actor& addBoxActor(
     return actor;
 }
 
+void writeTextFile(const std::filesystem::path& path, std::string_view text) {
+    std::filesystem::create_directories(path.parent_path());
+    std::ofstream stream(path);
+    stream << text;
+}
+
 void testGuid() {
     const engine::Guid guid = engine::Guid::create();
     require(guid.valid(), "Created GUID must be valid.");
@@ -500,6 +506,63 @@ void testPngWriter() {
     std::filesystem::remove(path);
 }
 
+void testAssetRegistryLoadsGuidAssets() {
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path() / "cocoa-engine-assets-test";
+    std::filesystem::remove_all(root);
+
+    const engine::Guid meshGuid =
+        engine::Guid::parse("11111111111111112222222222222222").value();
+    const engine::Guid materialGuid =
+        engine::Guid::parse("33333333333333334444444444444444").value();
+
+    writeTextFile(
+        root / "Meshes" / "Cube.asset.json",
+        R"({"type":"StaticMesh","primitive":"Cube"})"
+    );
+    writeTextFile(
+        root / "Meshes" / "Cube.asset.json.meta",
+        R"({"guid":"11111111111111112222222222222222","name":"Cube","type":"StaticMesh","source":"Cube.asset.json"})"
+    );
+    writeTextFile(
+        root / "Materials" / "Default.material.json",
+        R"({"baseColor":[0.25,0.5,0.75],"roughness":0.4,"metallic":0.1})"
+    );
+    writeTextFile(
+        root / "Materials" / "Default.material.json.meta",
+        R"({"guid":"33333333333333334444444444444444","name":"Default","type":"Material","source":"Default.material.json"})"
+    );
+
+    engine::OutputLog log;
+    engine::AssetRegistry registry;
+    registry.scan(root, &log);
+    require(registry.assets().size() == 2, "Asset registry did not scan meta files.");
+    require(
+        registry.find(meshGuid) != nullptr &&
+            registry.findByName("Default") != nullptr &&
+            registry.findByType("StaticMesh").size() == 1,
+        "Asset lookup by GUID, name, or type failed."
+    );
+
+    const auto mesh = registry.loadStaticMesh(meshGuid, &log);
+    require(
+        mesh.has_value() && mesh->guid == meshGuid &&
+            mesh->primitive == engine::MeshPrimitive::Cube,
+        "StaticMesh asset did not load from GUID metadata."
+    );
+
+    const auto material = registry.loadMaterial(materialGuid, &log);
+    require(
+        material.has_value() &&
+            near(material->material.baseColor, {0.25F, 0.5F, 0.75F}) &&
+            near(material->material.roughness, 0.4F) &&
+            near(material->material.metallic, 0.1F),
+        "Material asset did not load reflected values."
+    );
+
+    std::filesystem::remove_all(root);
+}
+
 } // namespace
 
 int main() {
@@ -517,6 +580,7 @@ int main() {
         testWorldRestoreAndSnapshotTransactions();
         testApplicationOptions();
         testPngWriter();
+        testAssetRegistryLoadsGuidAssets();
         std::cout << "All engine tests passed.\n";
         return 0;
     } catch (const std::exception& exception) {

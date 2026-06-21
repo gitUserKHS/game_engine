@@ -78,6 +78,56 @@ engine::PropertyValue propertyFromJson(
     return {};
 }
 
+std::optional<Json> readJsonFile(
+    const std::filesystem::path& path,
+    engine::OutputLog* log
+) {
+    std::ifstream stream(path);
+    if (!stream) {
+        if (log != nullptr) {
+            log->write("Could not open asset file: " + pathToUtf8(path));
+        }
+        return std::nullopt;
+    }
+
+    try {
+        Json json;
+        stream >> json;
+        return json;
+    } catch (const std::exception& exception) {
+        if (log != nullptr) {
+            log->write(
+                "Could not parse asset file " + pathToUtf8(path) + ": " +
+                exception.what()
+            );
+        }
+        return std::nullopt;
+    }
+}
+
+engine::MeshPrimitive meshPrimitiveFromText(std::string_view text) {
+    if (text == "Cube") {
+        return engine::MeshPrimitive::Cube;
+    }
+    return engine::MeshPrimitive::Cube;
+}
+
+glm::vec3 jsonVectorOr(
+    const Json& json,
+    std::string_view key,
+    const glm::vec3& fallback
+) {
+    const auto found = json.find(std::string{key});
+    if (found == json.end() || !found->is_array() || found->size() != 3) {
+        return fallback;
+    }
+    return {
+        found->at(0).get<float>(),
+        found->at(1).get<float>(),
+        found->at(2).get<float>(),
+    };
+}
+
 Json serializeProperties(const engine::Object& object) {
     Json result = Json::object();
     const engine::TypeDescriptor* type = object.typeDescriptor();
@@ -541,6 +591,77 @@ const AssetData* AssetRegistry::find(Guid guid) const {
         [guid](const AssetData& asset) { return asset.guid == guid; }
     );
     return found == assets_.end() ? nullptr : &*found;
+}
+
+const AssetData* AssetRegistry::findByName(std::string_view name) const {
+    const auto found = std::find_if(
+        assets_.begin(),
+        assets_.end(),
+        [name](const AssetData& asset) { return asset.name == name; }
+    );
+    return found == assets_.end() ? nullptr : &*found;
+}
+
+std::vector<const AssetData*> AssetRegistry::findByType(
+    std::string_view type
+) const {
+    std::vector<const AssetData*> result;
+    for (const AssetData& asset : assets_) {
+        if (asset.type == type) {
+            result.push_back(&asset);
+        }
+    }
+    return result;
+}
+
+std::optional<StaticMeshAsset> AssetRegistry::loadStaticMesh(
+    Guid guid,
+    OutputLog* log
+) const {
+    const AssetData* asset = find(guid);
+    if (asset == nullptr || asset->type != "StaticMesh") {
+        if (log != nullptr) {
+            log->write("StaticMesh asset GUID was not found.");
+        }
+        return std::nullopt;
+    }
+
+    const std::optional<Json> json = readJsonFile(asset->source, log);
+    if (!json.has_value()) {
+        return std::nullopt;
+    }
+    return StaticMeshAsset{
+        asset->guid,
+        meshPrimitiveFromText(json->value("primitive", "Cube")),
+    };
+}
+
+std::optional<MaterialAsset> AssetRegistry::loadMaterial(
+    Guid guid,
+    OutputLog* log
+) const {
+    const AssetData* asset = find(guid);
+    if (asset == nullptr || asset->type != "Material") {
+        if (log != nullptr) {
+            log->write("Material asset GUID was not found.");
+        }
+        return std::nullopt;
+    }
+
+    const std::optional<Json> json = readJsonFile(asset->source, log);
+    if (!json.has_value()) {
+        return std::nullopt;
+    }
+
+    MaterialInstance material;
+    material.baseColor = jsonVectorOr(
+        *json,
+        "baseColor",
+        material.baseColor
+    );
+    material.roughness = json->value("roughness", material.roughness);
+    material.metallic = json->value("metallic", material.metallic);
+    return MaterialAsset{asset->guid, material};
 }
 
 std::string WorldSerializer::toJson(const World& world) {
